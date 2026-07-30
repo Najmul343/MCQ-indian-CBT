@@ -540,8 +540,8 @@ export const PrincipalDashboard: React.FC = () => {
             </div>
           ) : (
             <div className="space-y-3">
-              {integrityViolations.map((a) => (
-                <div key={a.attempt_id} className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/40 p-4 rounded-2xl text-xs space-y-1">
+              {integrityViolations.map((a, idx) => (
+                <div key={a.attempt_id ? `${a.attempt_id}_${idx}` : `violation_${idx}`} className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/40 p-4 rounded-2xl text-xs space-y-1">
                   <div className="flex items-center justify-between font-bold text-red-900 dark:text-red-200">
                     <span>{a.student_name} ({a.roll_no})</span>
                     <span>Test: {a.test_title}</span>

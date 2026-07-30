@@ -149,7 +149,7 @@ export const PracticeScreen: React.FC<PracticeScreenProps> = ({ test, onClose })
 
     // Save attempt in Firestore
     try {
-      const attemptId = `attempt_practice_${Date.now()}`;
+      const attemptId = `attempt_practice_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
       const attemptDoc: TestAttempt = {
         attempt_id: attemptId,
         tenant_id: test.tenant_id,

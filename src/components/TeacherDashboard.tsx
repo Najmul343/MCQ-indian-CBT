@@ -363,8 +363,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {attempts.map((a) => (
-                  <tr key={a.attempt_id}>
+                {attempts.map((a, idx) => (
+                  <tr key={a.attempt_id ? `${a.attempt_id}_${idx}` : `attempt_${idx}`}>
                     <td className="p-3.5 font-bold text-slate-900 dark:text-white">{a.student_name}</td>
                     <td className="p-3.5 font-mono">{a.roll_no}</td>
                     <td className="p-3.5">{a.test_title}</td>

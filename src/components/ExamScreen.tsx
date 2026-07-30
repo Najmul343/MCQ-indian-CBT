@@ -187,7 +187,7 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({ test, onClose }) => {
     const status = pct >= test.passing_marks ? 'PASS' : 'FAIL';
 
     try {
-      const attemptId = `attempt_exam_${Date.now()}`;
+      const attemptId = `attempt_exam_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
       const attemptDoc: TestAttempt = {
         attempt_id: attemptId,
         tenant_id: test.tenant_id,

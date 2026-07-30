@@ -163,7 +163,7 @@ export const StudentAnalyticsModal: React.FC<StudentAnalyticsModalProps> = ({
             ) : (
               <div className="space-y-2">
                 {attempts.map((a, idx) => (
-                  <div key={a.attempt_id || idx} className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3">
+                  <div key={a.attempt_id ? `${a.attempt_id}_${idx}` : `attempt_${idx}`} className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3">
                     <div>
                       <div className="font-bold text-slate-900 dark:text-white text-xs">{a.test_title}</div>
                       <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-2">

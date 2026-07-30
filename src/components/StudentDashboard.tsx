@@ -344,8 +344,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ onStartTest 
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {attempts.map((a) => (
-                    <tr key={a.attempt_id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                  {attempts.map((a, idx) => (
+                    <tr key={a.attempt_id ? `${a.attempt_id}_${idx}` : `attempt_${idx}`} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                       <td className="p-3.5 font-bold text-slate-900 dark:text-white">{a.test_title}</td>
                       <td className="p-3.5 font-medium">{a.score} / {a.total_marks}</td>
                       <td className="p-3.5 font-black text-blue-600">{a.percentage.toFixed(1)}%</td>

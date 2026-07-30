@@ -211,18 +211,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => unsubscribe();
   }, []);
 
-  // Login via Firebase Google Auth (Popup first, then Redirect fallback)
+  // Login via Firebase Google Auth Popup
   const loginWithGoogle = async (): Promise<UserProfile | null> => {
     setLoading(true);
     sessionStorage.removeItem('explicit_logout');
 
     try {
-      const popupPromise = signInWithPopup(auth, googleProvider);
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Popup blocked or closed')), 6000)
-      );
-
-      const result = (await Promise.race([popupPromise, timeoutPromise])) as any;
+      const result = await signInWithPopup(auth, googleProvider);
       if (result && result.user) {
         const userProfile = await resolveUserProfile(result.user);
 
@@ -240,16 +235,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return userProfile;
       }
     } catch (popupErr: any) {
-      console.warn('Google Popup login failed or blocked, attempting redirect:', popupErr?.message || popupErr);
-      
-      try {
-        await signInWithRedirect(auth, googleProvider);
-        return null;
-      } catch (redirectErr: any) {
-        console.error('Google Redirect auth error:', redirectErr);
-        setLoading(false);
-        throw redirectErr || popupErr;
-      }
+      console.warn('Google Popup login notice:', popupErr?.message || popupErr);
+      setLoading(false);
+      throw popupErr;
     }
 
     setLoading(false);
