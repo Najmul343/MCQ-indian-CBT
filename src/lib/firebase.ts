@@ -492,10 +492,15 @@ export async function safeGetDocs<T>(collectionName: string, fallback: T[]): Pro
   let rawDocs: any[] = cachedDocs;
 
   try {
-    const snap = await getDocs(collection(db, collectionName));
-    if (!snap.empty) {
+    const fetchPromise = getDocs(collection(db, collectionName));
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Firestore fetch timeout')), 2500)
+    );
+    const snap = (await Promise.race([fetchPromise, timeoutPromise])) as any;
+
+    if (snap && !snap.empty) {
       const remoteDocs = snap.docs
-        .map((d) => {
+        .map((d: any) => {
           const data = d.data() as any;
           return { ...data, doc_id: data.doc_id || d.id };
         })
@@ -615,7 +620,11 @@ export async function safeSetDoc(collectionName: string, docId: string, idField:
   }
 
   try {
-    await setDoc(doc(db, collectionName, docId), cleanData, { merge: true });
+    const setPromise = setDoc(doc(db, collectionName, docId), cleanData, { merge: true });
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Firestore setDoc timeout')), 2500)
+    );
+    await Promise.race([setPromise, timeoutPromise]);
   } catch (err: any) {
     console.warn(`Firestore setDoc notice for ${collectionName}/${docId}:`, err?.message || err);
   }

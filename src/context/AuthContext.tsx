@@ -73,7 +73,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
 
@@ -82,22 +81,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           try {
             const loadedProfile = await resolveUserProfile(firebaseUser);
             setProfile(loadedProfile);
+            sessionStorage.setItem('active_user_profile', JSON.stringify(loadedProfile));
             localStorage.setItem('active_user_profile', JSON.stringify(loadedProfile));
           } catch (e) {
             console.error('Error loading user profile:', e);
           }
         } else {
           const explicitLogout = sessionStorage.getItem('explicit_logout');
-          const savedActiveUser = localStorage.getItem('active_user_profile');
+          const sessionActiveUser = sessionStorage.getItem('active_user_profile');
 
-          if (savedActiveUser && !explicitLogout) {
+          if (explicitLogout) {
+            setProfile(null);
+          } else if (sessionActiveUser) {
             try {
-              setProfile(JSON.parse(savedActiveUser));
+              setProfile(JSON.parse(sessionActiveUser));
             } catch (e) {
               setProfile(null);
             }
           } else {
-            // Require explicit login on new machine / fresh session
+            // Unauthenticated fresh launch: default to Login Screen
             setProfile(null);
           }
         }
@@ -118,6 +120,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const userProfile = await resolveUserProfile(fbUser);
 
       sessionStorage.removeItem('explicit_logout');
+      sessionStorage.setItem('active_user_profile', JSON.stringify(userProfile));
       localStorage.setItem('active_user_profile', JSON.stringify(userProfile));
       setProfile(userProfile);
       setLoading(false);
@@ -129,23 +132,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Login as any UserProfile (newly created or registered in Firestore)
+  // Login as any UserProfile (instant UI update + background Firestore sync)
   const loginAsUser = async (userProfile: UserProfile) => {
-    setLoading(true);
-
     // Enforce super_admin for thenajmulhuda@gmail.com
     if (userProfile.email?.toLowerCase() === 'thenajmulhuda@gmail.com') {
       userProfile.role = 'super_admin';
     }
 
-    try {
-      await safeSetDoc('users', userProfile.uid, 'uid', userProfile);
-    } catch (e) {
-      console.warn('Set user notice:', e);
-    }
-
+    // 1. Instant UI & Session Update
     sessionStorage.removeItem('explicit_logout');
+    sessionStorage.setItem('active_user_profile', JSON.stringify(userProfile));
     localStorage.setItem('active_user_profile', JSON.stringify(userProfile));
+    
     setProfile(userProfile);
     setIsGhostMode(false);
     setOriginalAdminProfile(null);
@@ -153,6 +151,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     sessionStorage.removeItem('ghost_admin_profile');
     sessionStorage.removeItem('ghost_target_profile');
     setLoading(false);
+
+    // 2. Background Firestore Sync (non-blocking)
+    safeSetDoc('users', userProfile.uid, 'uid', userProfile).catch((e) => {
+      console.warn('Background user sync notice:', e);
+    });
   };
 
   // Login as one of the pre-configured Demo Roles
@@ -216,6 +219,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setGhostTargetUser(null);
     sessionStorage.removeItem('ghost_admin_profile');
     sessionStorage.removeItem('ghost_target_profile');
+    sessionStorage.removeItem('active_user_profile');
     localStorage.removeItem('active_user_profile');
     sessionStorage.setItem('explicit_logout', 'true');
     setProfile(null);

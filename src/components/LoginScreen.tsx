@@ -276,6 +276,83 @@ export const LoginScreen: React.FC = () => {
             </button>
           </form>
 
+          {/* Quick One-Click Demo / Admin Access for Vercel */}
+          <div className="pt-2 border-t border-slate-800/80 space-y-1.5">
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider text-center">
+              ⚡ Quick Instant Login (For Testing / Vercel Deploy):
+            </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                onClick={() =>
+                  loginAsUser({
+                    ...DEFAULT_SUPER_ADMIN,
+                    email: 'thenajmulhuda@gmail.com',
+                    name: 'Najmul Huda',
+                    role: 'super_admin'
+                  })
+                }
+                className="px-2.5 py-1.5 bg-purple-950/80 hover:bg-purple-900 border border-purple-800 text-purple-200 text-[11px] font-bold rounded-xl text-center transition-all cursor-pointer"
+              >
+                👑 Super Admin
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  loginAsUser({
+                    uid: 'usr_principal_demo',
+                    email: 'principal@iti.edu',
+                    name: 'Dr. Ramesh Sharma',
+                    role: 'principal',
+                    tenant_id: 'tenant_govt_iti',
+                    tenant_name: 'Government ITI Central',
+                    status: 'active'
+                  })
+                }
+                className="px-2.5 py-1.5 bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-800 text-indigo-200 text-[11px] font-bold rounded-xl text-center transition-all cursor-pointer"
+              >
+                🏫 Principal
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  loginAsUser({
+                    uid: 'usr_teacher_demo',
+                    email: 'teacher@iti.edu',
+                    name: 'Prof. Anita Verma',
+                    role: 'teacher',
+                    tenant_id: 'tenant_govt_iti',
+                    tenant_name: 'Government ITI Central',
+                    status: 'active'
+                  })
+                }
+                className="px-2.5 py-1.5 bg-blue-950/80 hover:bg-blue-900 border border-blue-800 text-blue-200 text-[11px] font-bold rounded-xl text-center transition-all cursor-pointer"
+              >
+                👨‍🏫 Teacher
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  loginAsUser({
+                    uid: 'usr_student_demo',
+                    email: 'student@iti.edu',
+                    name: 'Rahul Kumar',
+                    role: 'student',
+                    tenant_id: 'tenant_govt_iti',
+                    tenant_name: 'Government ITI Central',
+                    rollNo: '2026001',
+                    trade: 'Electrician',
+                    className: 'Sem 1',
+                    status: 'active'
+                  })
+                }
+                className="px-2.5 py-1.5 bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-800 text-emerald-200 text-[11px] font-bold rounded-xl text-center transition-all cursor-pointer"
+              >
+                🎓 Student
+              </button>
+            </div>
+          </div>
+
           <p className="text-[11px] text-center text-slate-400 leading-relaxed px-2">
             ✨ Logging in via Gmail grants instant access to your account & practice tests.
           </p>
