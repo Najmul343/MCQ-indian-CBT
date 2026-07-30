@@ -73,14 +73,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
+    // 1. Check if Ghost Mode was active before page reload
+    const savedGhostAdmin = sessionStorage.getItem('ghost_admin_profile');
+    const savedGhostTarget = sessionStorage.getItem('ghost_target_profile');
+
+    if (savedGhostAdmin && savedGhostTarget) {
+      try {
+        const adminP = JSON.parse(savedGhostAdmin);
+        const targetP = JSON.parse(savedGhostTarget);
+        setOriginalAdminProfile(adminP);
+        setGhostTargetUser(targetP);
+        setProfile(targetP);
+        setIsGhostMode(true);
+      } catch (e) {
+        sessionStorage.removeItem('ghost_admin_profile');
+        sessionStorage.removeItem('ghost_target_profile');
+      }
+    }
+
+    // 2. Firebase Auth Listener
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
 
-      if (!isGhostMode) {
+      // Only update profile if NOT currently in Ghost Mode
+      if (!sessionStorage.getItem('ghost_admin_profile')) {
         if (firebaseUser) {
           try {
             const loadedProfile = await resolveUserProfile(firebaseUser);
             setProfile(loadedProfile);
+            sessionStorage.removeItem('explicit_logout');
             sessionStorage.setItem('active_user_profile', JSON.stringify(loadedProfile));
             localStorage.setItem('active_user_profile', JSON.stringify(loadedProfile));
           } catch (e) {
@@ -90,7 +111,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const explicitLogout = sessionStorage.getItem('explicit_logout');
           const sessionActiveUser = sessionStorage.getItem('active_user_profile');
 
-          if (explicitLogout) {
+          if (explicitLogout === 'true') {
             setProfile(null);
           } else if (sessionActiveUser) {
             try {
@@ -99,7 +120,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               setProfile(null);
             }
           } else {
-            // Unauthenticated fresh launch: default to Login Screen
+            // Fresh launch / unauthenticated: Default to clean Login Screen
             setProfile(null);
           }
         }
@@ -111,17 +132,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => unsubscribe();
   }, []);
 
-  // Login via Firebase Google Auth Popup
+  // Login via Firebase Google Auth Popup with race timeout
   const loginWithGoogle = async (): Promise<UserProfile | null> => {
     setLoading(true);
+    sessionStorage.removeItem('explicit_logout');
+
     try {
-      const result = await signInWithPopup(auth, googleProvider);
+      const popupPromise = signInWithPopup(auth, googleProvider);
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Google login popup timed out or was blocked.')), 12000)
+      );
+
+      const result = (await Promise.race([popupPromise, timeoutPromise])) as any;
       const fbUser = result.user;
       const userProfile = await resolveUserProfile(fbUser);
 
-      sessionStorage.removeItem('explicit_logout');
       sessionStorage.setItem('active_user_profile', JSON.stringify(userProfile));
       localStorage.setItem('active_user_profile', JSON.stringify(userProfile));
+
+      setIsGhostMode(false);
+      setOriginalAdminProfile(null);
+      setGhostTargetUser(null);
+      sessionStorage.removeItem('ghost_admin_profile');
+      sessionStorage.removeItem('ghost_target_profile');
+
       setProfile(userProfile);
       setLoading(false);
       return userProfile;

@@ -48,14 +48,13 @@ export const LoginScreen: React.FC = () => {
 
       if (errCode === 'auth/unauthorized-domain' || errMsg.includes('unauthorized-domain')) {
         setError(
-          'Vercel Domain Authorization Required in Firebase Console: Go to Firebase Console -> Authentication -> Settings -> Authorized Domains and add your *.vercel.app domain. Alternatively, enter your Gmail ID below to sign in instantly!'
+          '🌐 Google Auth popup domain restriction detected on this external URL. No problem! Enter your Gmail ID below to sign in directly with 1 click.'
         );
       } else if (errCode === 'auth/popup-blocked' || errCode === 'auth/popup-closed-by-user') {
-        setError('Google popup was closed or blocked. You can enter your Gmail ID below to sign in directly.');
+        setError('⚡ Google popup was closed or blocked by browser. Simply type your Gmail address below to sign in directly!');
       } else {
-        setError(errMsg || 'Failed to sign in with Google. You can sign in directly using your Gmail ID below.');
+        setError('💡 Popup login was restricted on this domain/iframe. Type your Gmail address below to sign in instantly!');
       }
-      setShowStaffLogin(true);
     } finally {
       setLoading(false);
     }
