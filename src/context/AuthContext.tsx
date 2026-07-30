@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { onAuthStateChanged, signOut, signInWithPopup, User } from 'firebase/auth';
+import { onAuthStateChanged, signOut, signInWithPopup, signInWithRedirect, getRedirectResult, User } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, googleProvider, db, DEFAULT_SUPER_ADMIN, DEMO_USERS, seedFirestoreIfNeeded, safeSetDoc, safeGetDocs, safeDeleteDoc, upsertUserByEmail } from '../lib/firebase';
 import { UserProfile, UserRole } from '../types';
@@ -91,7 +91,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    // 2. Firebase Auth Listener
+    // 2. Catch Google Auth Redirect Result if returning from OAuth redirect
+    getRedirectResult(auth)
+      .then(async (result) => {
+        if (result && result.user) {
+          const loadedProfile = await resolveUserProfile(result.user);
+          sessionStorage.removeItem('explicit_logout');
+          sessionStorage.setItem('active_user_profile', JSON.stringify(loadedProfile));
+          localStorage.setItem('active_user_profile', JSON.stringify(loadedProfile));
+          setProfile(loadedProfile);
+        }
+      })
+      .catch((err) => {
+        console.warn('Redirect auth result check:', err);
+      });
+
+    // 3. Firebase Auth Listener
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
 
@@ -132,7 +147,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => unsubscribe();
   }, []);
 
-  // Login via Firebase Google Auth Popup with race timeout
+  // Login via Firebase Google Auth (Popup first, then Redirect fallback)
   const loginWithGoogle = async (): Promise<UserProfile | null> => {
     setLoading(true);
     sessionStorage.removeItem('explicit_logout');
@@ -140,30 +155,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const popupPromise = signInWithPopup(auth, googleProvider);
       const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Google login popup timed out or was blocked.')), 12000)
+        setTimeout(() => reject(new Error('Popup blocked or closed')), 6000)
       );
 
       const result = (await Promise.race([popupPromise, timeoutPromise])) as any;
-      const fbUser = result.user;
-      const userProfile = await resolveUserProfile(fbUser);
+      if (result && result.user) {
+        const userProfile = await resolveUserProfile(result.user);
 
-      sessionStorage.setItem('active_user_profile', JSON.stringify(userProfile));
-      localStorage.setItem('active_user_profile', JSON.stringify(userProfile));
+        sessionStorage.setItem('active_user_profile', JSON.stringify(userProfile));
+        localStorage.setItem('active_user_profile', JSON.stringify(userProfile));
 
-      setIsGhostMode(false);
-      setOriginalAdminProfile(null);
-      setGhostTargetUser(null);
-      sessionStorage.removeItem('ghost_admin_profile');
-      sessionStorage.removeItem('ghost_target_profile');
+        setIsGhostMode(false);
+        setOriginalAdminProfile(null);
+        setGhostTargetUser(null);
+        sessionStorage.removeItem('ghost_admin_profile');
+        sessionStorage.removeItem('ghost_target_profile');
 
-      setProfile(userProfile);
-      setLoading(false);
-      return userProfile;
-    } catch (err) {
-      console.error('Google Sign In Error:', err);
-      setLoading(false);
-      throw err;
+        setProfile(userProfile);
+        setLoading(false);
+        return userProfile;
+      }
+    } catch (popupErr: any) {
+      console.warn('Google Popup login failed or blocked, attempting redirect:', popupErr?.message || popupErr);
+      
+      try {
+        await signInWithRedirect(auth, googleProvider);
+        return null;
+      } catch (redirectErr: any) {
+        console.error('Google Redirect auth error:', redirectErr);
+        setLoading(false);
+        throw redirectErr || popupErr;
+      }
     }
+
+    setLoading(false);
+    return null;
   };
 
   // Login as any UserProfile (instant UI update + background Firestore sync)
