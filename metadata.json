@@ -1,0 +1,6 @@
+{
+  "name": "SaaS MockTest & Quiz Platform",
+  "description": "Multi-tenant SaaS Mock Test and Practice System with 4-Tier Hierarchy, Automated Google Sheets One-Click Sync, Ghost Mode Impersonation, and Firestore real-time database.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
