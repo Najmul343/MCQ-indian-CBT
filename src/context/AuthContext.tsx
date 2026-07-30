@@ -94,13 +94,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             try {
               setProfile(JSON.parse(savedActiveUser));
             } catch (e) {
-              setProfile(DEFAULT_SUPER_ADMIN);
+              setProfile(null);
             }
-          } else if (explicitLogout) {
-            setProfile(null);
           } else {
-            // Default to Super Admin profile on first load
-            setProfile(DEFAULT_SUPER_ADMIN);
+            // Require explicit login on new machine / fresh session
+            setProfile(null);
           }
         }
       }

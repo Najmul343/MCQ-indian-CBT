@@ -43,17 +43,29 @@ export const LoginScreen: React.FC = () => {
       await loginWithGoogle();
     } catch (err: any) {
       console.error('Google Auth Error:', err);
-      setError(err?.message || 'Failed to sign in with Google. Please verify popups are allowed.');
+      const errCode = err?.code || '';
+      const errMsg = err?.message || '';
+
+      if (errCode === 'auth/unauthorized-domain' || errMsg.includes('unauthorized-domain')) {
+        setError(
+          'Vercel Domain Authorization Required in Firebase Console: Go to Firebase Console -> Authentication -> Settings -> Authorized Domains and add your *.vercel.app domain. Alternatively, enter your Gmail ID below to sign in instantly!'
+        );
+      } else if (errCode === 'auth/popup-blocked' || errCode === 'auth/popup-closed-by-user') {
+        setError('Google popup was closed or blocked. You can enter your Gmail ID below to sign in directly.');
+      } else {
+        setError(errMsg || 'Failed to sign in with Google. You can sign in directly using your Gmail ID below.');
+      }
+      setShowStaffLogin(true);
     } finally {
       setLoading(false);
     }
   };
 
-  // Handle Faculty / Email Sign In
+  // Handle Direct Gmail / Roll No / Email Sign In
   const handleEmailSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!emailOrRoll.trim()) {
-      setError('Please enter your registered email address or roll number.');
+      setError('Please enter your Gmail address or roll number.');
       return;
     }
 
@@ -77,21 +89,32 @@ export const LoginScreen: React.FC = () => {
       const dbUsers = await safeGetDocs<UserProfile>('users', []);
       const match = dbUsers.find(
         (u) =>
-          u.email.toLowerCase() === inputClean ||
+          (u.email && u.email.toLowerCase() === inputClean) ||
           (u.rollNo && u.rollNo.toLowerCase() === inputClean) ||
-          u.name.toLowerCase() === inputClean
+          (u.name && u.name.toLowerCase() === inputClean)
       );
 
       if (match) {
         await loginAsUser(match);
+      } else if (inputClean.includes('@')) {
+        // Register/Login new Gmail candidate if not pre-registered
+        const newProfile: UserProfile = {
+          uid: `usr_${Date.now()}`,
+          email: inputClean,
+          name: inputClean.split('@')[0],
+          role: 'student',
+          status: 'active',
+          createdAt: new Date().toISOString()
+        };
+        await loginAsUser(newProfile);
       } else {
         setError(
-          `No existing account found for "${emailOrRoll}". You can click "Sign in with Google" above to register instantly.`
+          `No existing account found for "${emailOrRoll}". Please enter a full Gmail ID (e.g. user@gmail.com) to sign in directly.`
         );
       }
     } catch (err) {
       console.error('Sign in query error:', err);
-      setError('Error signing in. Try clicking "Sign in with Google" instead.');
+      setError('Error signing in. Please check network connection and try again.');
     } finally {
       setLoading(false);
     }
@@ -189,7 +212,7 @@ export const LoginScreen: React.FC = () => {
           <button
             onClick={handleGoogleSignIn}
             disabled={loading}
-            className="w-full py-4 px-5 bg-white hover:bg-slate-100 text-slate-900 font-extrabold text-sm rounded-2xl transition-all shadow-xl hover:shadow-2xl flex items-center justify-center gap-3 cursor-pointer disabled:opacity-50 active:scale-98"
+            className="w-full py-3.5 px-5 bg-white hover:bg-slate-100 text-slate-900 font-extrabold text-sm rounded-2xl transition-all shadow-xl hover:shadow-2xl flex items-center justify-center gap-3 cursor-pointer disabled:opacity-50 active:scale-98"
           >
             {loading ? (
               <span>Signing in...</span>
@@ -213,118 +236,109 @@ export const LoginScreen: React.FC = () => {
                     d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.61l3.99 3.15c.95-2.85 3.6-4.96 6.72-4.96z"
                   />
                 </svg>
-                <span>Sign in with Google</span>
+                <span>Sign in with Google Popup</span>
               </>
             )}
           </button>
 
+          {/* Divider */}
+          <div className="relative my-3">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-slate-800"></div>
+            </div>
+            <div className="relative flex justify-center text-[10px] uppercase font-bold tracking-wider">
+              <span className="bg-slate-900 px-3 text-slate-500">OR Direct Gmail Sign-In</span>
+            </div>
+          </div>
+
+          {/* Direct Email Form */}
+          <form onSubmit={handleEmailSignIn} className="space-y-2.5">
+            <div>
+              <div className="relative">
+                <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+                <input
+                  type="text"
+                  placeholder="Enter your Gmail ID or Roll No"
+                  value={emailOrRoll}
+                  onChange={(e) => setEmailOrRoll(e.target.value)}
+                  className="w-full text-xs pl-10 pr-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              <span>Sign In Directly</span>
+            </button>
+          </form>
+
           <p className="text-[11px] text-center text-slate-400 leading-relaxed px-2">
-            ✨ Logging in via Gmail grants instant access to the <strong className="text-slate-200">Free Limited Version</strong> to practice free mock tests.
+            ✨ Logging in via Gmail grants instant access to your account & practice tests.
           </p>
         </div>
 
-        {/* Collapsible Secondary Section for Staff / Demo Access */}
-        <div className="pt-4 border-t border-slate-800 space-y-3">
+        {/* Collapsible Secondary Section for College Join Code */}
+        <div className="pt-3 border-t border-slate-800 space-y-3">
           <button
             type="button"
-            onClick={() => setShowStaffLogin(!showStaffLogin)}
-            className="w-full text-xs font-bold text-slate-400 hover:text-white flex items-center justify-between py-1 cursor-pointer transition-colors"
+            onClick={() => setShowJoinCode(!showJoinCode)}
+            className="w-full text-xs font-bold text-amber-400 hover:text-amber-300 flex items-center justify-between py-1 cursor-pointer transition-colors"
           >
             <span className="flex items-center gap-2">
-              <Mail className="w-3.5 h-3.5 text-blue-400" />
-              <span>Faculty, Admin or College Join Code?</span>
+              <Building2 className="w-3.5 h-3.5" />
+              <span>Have a College Join Code (e.g. GITI-DEL)?</span>
             </span>
-            <ChevronRight className={`w-4 h-4 transition-transform ${showStaffLogin ? 'rotate-90' : ''}`} />
+            <ChevronRight className={`w-4 h-4 transition-transform ${showJoinCode ? 'rotate-90' : ''}`} />
           </button>
 
-          {showStaffLogin && (
-            <div className="space-y-4 pt-2 animate-fade-in">
-              {/* Email Login Form */}
-              <form onSubmit={handleEmailSignIn} className="space-y-2.5">
-                <div>
-                  <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">
-                    Email or Roll Number
-                  </label>
-                  <div className="relative">
-                    <Mail className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-3" />
-                    <input
-                      type="text"
-                      placeholder="thenajmulhuda@gmail.com or 2026001"
-                      value={emailOrRoll}
-                      onChange={(e) => setEmailOrRoll(e.target.value)}
-                      className="w-full text-xs pl-9 pr-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-                    />
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
-                >
-                  <LogIn className="w-3.5 h-3.5" />
-                  <span>Sign In as Staff / Admin</span>
-                </button>
-              </form>
-
-              {/* College Join Code Option */}
-              <div className="pt-2 border-t border-slate-800/80">
-                <button
-                  type="button"
-                  onClick={() => setShowJoinCode(!showJoinCode)}
-                  className="text-[11px] font-bold text-amber-400 hover:underline flex items-center gap-1"
-                >
-                  <Building2 className="w-3 h-3" />
-                  <span>Have a College Join Code (e.g. GITI-DEL)?</span>
-                </button>
-
-                {showJoinCode && (
-                  <form onSubmit={handleCollegeJoin} className="mt-2 space-y-2.5 bg-slate-950 p-3 rounded-xl border border-slate-800">
-                    <div>
-                      <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">
-                        College Join Code *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. GITI-DEL"
-                        value={joinCode}
-                        onChange={(e) => setJoinCode(e.target.value)}
-                        className="w-full text-xs px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white font-mono uppercase font-bold focus:outline-none focus:ring-2 focus:ring-amber-500"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <input
-                        type="text"
-                        required
-                        placeholder="Full Name"
-                        value={studentName}
-                        onChange={(e) => setStudentName(e.target.value)}
-                        className="text-xs px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white focus:outline-none"
-                      />
-                      <input
-                        type="email"
-                        required
-                        placeholder="Gmail ID"
-                        value={studentEmail}
-                        onChange={(e) => setStudentEmail(e.target.value)}
-                        className="text-xs px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white focus:outline-none"
-                      />
-                    </div>
-
-                    <button
-                      type="submit"
-                      disabled={loading}
-                      className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer"
-                    >
-                      <CheckCircle2 className="w-3 h-3" />
-                      <span>Join College</span>
-                    </button>
-                  </form>
-                )}
+          {showJoinCode && (
+            <form onSubmit={handleCollegeJoin} className="space-y-2.5 bg-slate-950 p-3 rounded-xl border border-slate-800 animate-fade-in">
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">
+                  College Join Code *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. GITI-DEL"
+                  value={joinCode}
+                  onChange={(e) => setJoinCode(e.target.value)}
+                  className="w-full text-xs px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white font-mono uppercase font-bold focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
               </div>
-            </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  type="text"
+                  required
+                  placeholder="Full Name"
+                  value={studentName}
+                  onChange={(e) => setStudentName(e.target.value)}
+                  className="text-xs px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white focus:outline-none"
+                />
+                <input
+                  type="email"
+                  required
+                  placeholder="Gmail ID"
+                  value={studentEmail}
+                  onChange={(e) => setStudentEmail(e.target.value)}
+                  className="text-xs px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white focus:outline-none"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer"
+              >
+                <CheckCircle2 className="w-3 h-3" />
+                <span>Join College</span>
+              </button>
+            </form>
           )}
         </div>
 
