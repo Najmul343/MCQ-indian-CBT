@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Test, Question, TestAttempt } from '../types';
 import { doc, setDoc } from 'firebase/firestore';
-import { db, safeSetDoc } from '../lib/firebase';
+import { db, safeSetDoc, resolveQuestionsForTest } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
 import { 
   Clock, 
@@ -26,9 +26,21 @@ interface ExamScreenProps {
 export const ExamScreen: React.FC<ExamScreenProps> = ({ test, onClose }) => {
   const { profile } = useAuth();
 
-  const questions: Question[] = test.questions && test.questions.length > 0 
-    ? test.questions 
-    : [];
+  const [questions, setQuestions] = useState<Question[]>(test.questions || []);
+  const [loadingQuestions, setLoadingQuestions] = useState<boolean>(!test.questions || test.questions.length === 0);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (!test.questions || test.questions.length === 0) {
+      resolveQuestionsForTest(test).then((qs) => {
+        if (isMounted) {
+          setQuestions(qs);
+          setLoadingQuestions(false);
+        }
+      });
+    }
+    return () => { isMounted = false; };
+  }, [test]);
 
   const [hasStarted, setHasStarted] = useState<boolean>(false);
   const [currentQ, setCurrentQ] = useState<number>(0);
@@ -164,56 +176,93 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({ test, onClose }) => {
       document.exitFullscreen().catch(() => {});
     }
 
-    let score = 0;
-    let totalMarks = 0;
+    const timeTaken = (test.duration_minutes * 60) - timeLeft;
 
+    // Build question responses map
+    const responsesByQId: Record<string, string> = {};
     questions.forEach((q, idx) => {
-      const pts = q.points || 1;
-      const neg = q.negative_marks || 0;
-      totalMarks += pts;
-
-      const userAns = answers[idx];
-      if (userAns) {
-        if (userAns === q.correct_option) {
-          score += pts;
-        } else {
-          score -= neg;
-        }
+      if (answers[idx]) {
+        const qKey = q.question_id || q.id || `q_${idx}`;
+        responsesByQId[qKey] = answers[idx];
       }
     });
 
-    if (score < 0) score = 0;
-    const pct = totalMarks > 0 ? (score / totalMarks) * 100 : 0;
-    const status = pct >= test.passing_marks ? 'PASS' : 'FAIL';
+    let submittedViaFunction = false;
 
+    // Attempt server-side scoring submission via Cloud Function
     try {
-      const attemptId = `attempt_exam_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-      const attemptDoc: TestAttempt = {
-        attempt_id: attemptId,
-        tenant_id: test.tenant_id,
-        teacher_id: test.teacher_id,
-        student_id: profile?.uid || 'guest_student',
-        student_email: profile?.email || 'student@gmail.com',
-        student_name: profile?.name || 'Student',
-        roll_no: profile?.rollNo || '2026001',
-        trade: profile?.trade || 'Electrician',
-        test_id: test.test_id,
-        test_title: test.title,
-        status,
-        responses: answers as any,
-        score,
-        total_marks: totalMarks,
-        percentage: pct,
-        time_taken_seconds: (test.duration_minutes * 60) - timeLeft,
-        fs_violations: fsViolations,
-        tab_switches: tabSwitches,
-        submitted_at: new Date().toISOString(),
-        mode: 'exam'
-      };
+      const { getFunctions, httpsCallable } = await import('firebase/functions');
+      const { app } = await import('../lib/firebase');
+      const functions = getFunctions(app);
+      const submitFn = httpsCallable(functions, 'submitTestAttempt');
 
-      await safeSetDoc('test_attempts', attemptId, 'attempt_id', attemptDoc);
-    } catch (e) {
-      console.warn('Exam attempt save notice:', e);
+      const res: any = await submitFn({
+        test_id: test.test_id,
+        responses: responsesByQId,
+        time_taken_seconds: timeTaken
+      });
+
+      if (res.data?.success) {
+        submittedViaFunction = true;
+        console.log('✅ Exam attempt scored and saved server-side via Cloud Function:', res.data);
+      }
+    } catch (fnErr) {
+      console.warn('Notice calling submitTestAttempt Cloud Function (falling back to client save):', fnErr);
+    }
+
+    // Fallback: Local client-side calculation if Cloud Function unavailable or preview mode
+    if (!submittedViaFunction) {
+      let score = 0;
+      let totalMarks = 0;
+
+      questions.forEach((q, idx) => {
+        const pts = q.points || 1;
+        const neg = q.negative_marks || 0;
+        totalMarks += pts;
+
+        const userAns = answers[idx];
+        if (userAns) {
+          if (userAns === q.correct_option) {
+            score += pts;
+          } else {
+            score -= neg;
+          }
+        }
+      });
+
+      if (score < 0) score = 0;
+      const pct = totalMarks > 0 ? (score / totalMarks) * 100 : 0;
+      const status = pct >= test.passing_marks ? 'PASS' : 'FAIL';
+
+      try {
+        const attemptId = `attempt_exam_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        const attemptDoc: TestAttempt = {
+          attempt_id: attemptId,
+          tenant_id: test.tenant_id,
+          teacher_id: test.teacher_id,
+          student_id: profile?.uid || 'guest_student',
+          student_email: profile?.email || 'student@gmail.com',
+          student_name: profile?.name || 'Student',
+          roll_no: profile?.rollNo || '2026001',
+          trade: profile?.trade || 'Electrician',
+          test_id: test.test_id,
+          test_title: test.title,
+          status,
+          responses: answers as any,
+          score,
+          total_marks: totalMarks,
+          percentage: pct,
+          time_taken_seconds: timeTaken,
+          fs_violations: fsViolations,
+          tab_switches: tabSwitches,
+          submitted_at: new Date().toISOString(),
+          mode: 'exam'
+        };
+
+        await safeSetDoc('test_attempts', attemptId, 'attempt_id', attemptDoc);
+      } catch (e) {
+        console.warn('Exam attempt save notice:', e);
+      }
     }
   };
 

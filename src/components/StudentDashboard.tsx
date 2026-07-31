@@ -149,6 +149,17 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ onStartTest 
                 Target Exam: {activeGoalFilter}
               </span>
 
+              {profile?.tenant_id === 'individual' ? (
+                <span className="bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[10px] font-extrabold uppercase tracking-widest px-3 py-1 rounded-full inline-flex items-center gap-1">
+                  <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                  Individual B2C Candidate
+                </span>
+              ) : (
+                <span className="bg-slate-800 text-slate-300 border border-slate-700 text-[10px] font-extrabold uppercase tracking-widest px-3 py-1 rounded-full inline-flex items-center gap-1">
+                  {profile?.tenant_name || 'Institute Candidate'}
+                </span>
+              )}
+
               {studentAssignedFolderIds.length > 0 && (
                 <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-extrabold uppercase tracking-widest px-3 py-1 rounded-full inline-flex items-center gap-1">
                   <FolderCheck className="w-3.5 h-3.5 text-emerald-400" />

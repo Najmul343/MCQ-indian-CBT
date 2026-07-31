@@ -26,7 +26,7 @@ export const firebaseConfig = {
 };
 
 // Initialize Firebase App
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+export const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 // Initialize Auth
 export const auth = getAuth(app);
@@ -78,6 +78,9 @@ export const DEMO_TENANTS: Tenant[] = [
 export const INITIAL_QUESTIONS: Question[] = [
   {
     question_id: 'q_001',
+    tenant_id: 'global',
+    owner_id: 'system_global',
+    visibility: 'global',
     exam_type: 'NCVT ITI',
     subject: 'Trade Theory',
     chapter: 'Basic Electrical',
@@ -100,10 +103,15 @@ export const INITIAL_QUESTIONS: Question[] = [
     difficulty: 'easy',
     points: 1,
     negative_marks: 0,
-    explanation: 'Electric current is measured in Amperes (A). Named after French physicist André-Marie Ampère.'
+    explanation: 'Electric current is measured in Amperes (A). Named after French physicist André-Marie Ampère.',
+    usage_count: 5,
+    createdAt: new Date().toISOString()
   },
   {
     question_id: 'q_002',
+    tenant_id: 'global',
+    owner_id: 'system_global',
+    visibility: 'global',
     exam_type: 'NCVT ITI',
     subject: 'Trade Theory',
     chapter: 'Basic Electrical',
@@ -120,10 +128,15 @@ export const INITIAL_QUESTIONS: Question[] = [
     difficulty: 'medium',
     points: 1,
     negative_marks: 0.25,
-    explanation: "Ohm's Law states that Voltage (V) equals Current (I) multiplied by Resistance (R): V = I × R."
+    explanation: "Ohm's Law states that Voltage (V) equals Current (I) multiplied by Resistance (R): V = I × R.",
+    usage_count: 5,
+    createdAt: new Date().toISOString()
   },
   {
     question_id: 'q_003',
+    tenant_id: 'global',
+    owner_id: 'system_global',
+    visibility: 'global',
     exam_type: 'NCVT ITI',
     subject: 'Trade Theory',
     chapter: 'Conductors & Insulators',
@@ -146,10 +159,15 @@ export const INITIAL_QUESTIONS: Question[] = [
     difficulty: 'easy',
     points: 1,
     negative_marks: 0.25,
-    explanation: 'Silver has the highest electrical conductivity of all metals, though copper is most widely used due to cost efficiency.'
+    explanation: 'Silver has the highest electrical conductivity of all metals, though copper is most widely used due to cost efficiency.',
+    usage_count: 4,
+    createdAt: new Date().toISOString()
   },
   {
     question_id: 'q_004',
+    tenant_id: 'global',
+    owner_id: 'system_global',
+    visibility: 'global',
     exam_type: 'NCVT ITI',
     subject: 'Workshop Calculation & Science',
     chapter: 'Units and Fraction',
@@ -166,10 +184,15 @@ export const INITIAL_QUESTIONS: Question[] = [
     difficulty: 'medium',
     points: 2,
     negative_marks: 0.5,
-    explanation: 'The MKS (Meter, Kilogram, Second) / SI system forms the foundation of the modern metric system.'
+    explanation: 'The MKS (Meter, Kilogram, Second) / SI system forms the foundation of the modern metric system.',
+    usage_count: 3,
+    createdAt: new Date().toISOString()
   },
   {
     question_id: 'q_005',
+    tenant_id: 'global',
+    owner_id: 'system_global',
+    visibility: 'global',
     exam_type: 'NCVT ITI',
     subject: 'Employability Skills',
     chapter: 'Communication',
@@ -186,7 +209,9 @@ export const INITIAL_QUESTIONS: Question[] = [
     difficulty: 'easy',
     points: 1,
     negative_marks: 0,
-    explanation: 'Active listening requires full engagement, non-verbal feedback like eye contact, and clarifying questions without interrupting.'
+    explanation: 'Active listening requires full engagement, non-verbal feedback like eye contact, and clarifying questions without interrupting.',
+    usage_count: 2,
+    createdAt: new Date().toISOString()
   }
 ];
 
@@ -721,3 +746,26 @@ export async function upsertUserByEmail(userProfile: UserProfile): Promise<UserP
 
   return finalProfile;
 }
+
+export async function resolveQuestionsForTest(test: Test): Promise<Question[]> {
+  if (test.questions && test.questions.length > 0) {
+    return test.questions;
+  }
+  if (!test.question_ids || test.question_ids.length === 0) {
+    return [];
+  }
+  try {
+    const allQuestions = await safeGetDocs<Question>('questions', INITIAL_QUESTIONS);
+    const questionMap = new Map<string, Question>();
+    allQuestions.forEach((q) => {
+      if (q.question_id) questionMap.set(q.question_id, q);
+    });
+    return test.question_ids
+      .map((id) => questionMap.get(id))
+      .filter((q): q is Question => Boolean(q));
+  } catch (err) {
+    console.warn('Error resolving test questions:', err);
+    return [];
+  }
+}
+

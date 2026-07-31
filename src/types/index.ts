@@ -31,6 +31,8 @@ export interface Tenant {
   code: string;
   city?: string;
   join_code?: string; // e.g. 'GITI-2026' for self-onboarding
+  student_join_code?: string;
+  teacher_join_code?: string;
   principal_id?: string;
   principal_name?: string;
   principal_email?: string;
@@ -74,6 +76,9 @@ export interface TestFolder {
 export interface Question {
   question_id: string;
   folder_id?: string;
+  tenant_id?: string | 'global';
+  owner_id?: string;
+  visibility?: 'private' | 'tenant' | 'global';
   exam_type: string;
   subject: string;
   chapter: string;
@@ -91,7 +96,9 @@ export interface Question {
   explanation?: string;
   explanation_tr?: string;
   explanation_image?: string;
+  usage_count?: number;
   createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Course {
@@ -127,9 +134,11 @@ export interface Test {
   instructions: string[];
   question_ids: string[];
   questions?: Question[];
+  source?: 'own_bank' | 'global_bank' | 'mixed';
   mode: 'exam' | 'practice';
   status: 'Active' | 'Inactive';
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface TestAttempt {

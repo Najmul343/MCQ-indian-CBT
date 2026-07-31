@@ -167,6 +167,11 @@ export const QuizMakerModal: React.FC<QuizMakerModalProps> = ({
     }
 
     const testId = testToEdit ? testToEdit.test_id : `test_${Date.now()}`;
+    const hasGlobal = chosenQs.some((q) => q.visibility === 'global' || q.tenant_id === 'global');
+    const hasOwn = chosenQs.some((q) => q.visibility !== 'global' && q.tenant_id !== 'global');
+    const sourceBank: 'own_bank' | 'global_bank' | 'mixed' = 
+      hasGlobal && hasOwn ? 'mixed' : hasGlobal ? 'global_bank' : 'own_bank';
+
     const newTest: Test = {
       test_id: testId,
       folder_id: selectedFolderId === 'root' ? undefined : selectedFolderId,
@@ -184,9 +189,11 @@ export const QuizMakerModal: React.FC<QuizMakerModalProps> = ({
       instructions: instructions.split('\n').filter(Boolean),
       question_ids: chosenQs.map((q) => q.question_id),
       questions: chosenQs,
+      source: sourceBank,
       mode,
       status: testToEdit ? testToEdit.status : 'Active',
-      createdAt: testToEdit ? testToEdit.createdAt : new Date().toISOString()
+      createdAt: testToEdit ? testToEdit.createdAt : new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     };
 
     try {

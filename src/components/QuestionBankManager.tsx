@@ -3,6 +3,7 @@ import { Question, QuestionFolder } from '../types';
 import { safeSetDoc, safeDeleteDoc } from '../lib/firebase';
 import { ExcelQuestionUploaderModal } from './ExcelQuestionUploaderModal';
 import { convertGoogleDriveUrl } from '../lib/driveUtils';
+import { useAuth } from '../context/AuthContext';
 import { 
   Folder, 
   FolderPlus, 
@@ -35,6 +36,7 @@ export const QuestionBankManager: React.FC<QuestionBankManagerProps> = ({
   folders,
   onRefreshData
 }) => {
+  const { profile } = useAuth();
   // Navigation State (Current Folder ID, null for Root)
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -363,9 +365,17 @@ export const QuestionBankManager: React.FC<QuestionBankManagerProps> = ({
     }
 
     const qId = questionToEdit ? questionToEdit.question_id : `q_${Date.now()}`;
+    const userRole = profile?.role;
+    const defaultVisibility: 'private' | 'tenant' | 'global' = 
+      userRole === 'super_admin' ? 'global' : 'tenant';
+    const defaultTenantId = userRole === 'super_admin' ? 'global' : (profile?.tenant_id || 'tenant_govt_iti');
+
     const questionObj: Question = {
       question_id: qId,
       folder_id: questionToEdit ? questionToEdit.folder_id : (currentFolderId || undefined),
+      tenant_id: questionToEdit ? (questionToEdit.tenant_id || defaultTenantId) : defaultTenantId,
+      owner_id: questionToEdit ? (questionToEdit.owner_id || profile?.uid || 'user') : (profile?.uid || 'user'),
+      visibility: questionToEdit ? (questionToEdit.visibility || defaultVisibility) : defaultVisibility,
       exam_type: 'NCVT ITI',
       subject: qSubject.trim(),
       chapter: qChapter.trim(),
@@ -382,7 +392,9 @@ export const QuestionBankManager: React.FC<QuestionBankManagerProps> = ({
       points: 1,
       negative_marks: 0,
       explanation: qExplanation.trim() || undefined,
-      createdAt: questionToEdit ? questionToEdit.createdAt : new Date().toISOString()
+      usage_count: questionToEdit ? (questionToEdit.usage_count || 0) : 0,
+      createdAt: questionToEdit ? questionToEdit.createdAt : new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     };
 
     try {

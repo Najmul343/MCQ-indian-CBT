@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { onAuthStateChanged, signOut, signInWithPopup, signInWithRedirect, getRedirectResult, User } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { auth, googleProvider, db, DEFAULT_SUPER_ADMIN, DEMO_USERS, seedFirestoreIfNeeded, safeSetDoc, safeGetDocs, safeDeleteDoc, upsertUserByEmail } from '../lib/firebase';
-import { UserProfile, UserRole } from '../types';
+import { auth, googleProvider, db, DEFAULT_SUPER_ADMIN, DEMO_USERS, DEMO_TENANTS, seedFirestoreIfNeeded, safeSetDoc, safeGetDocs, safeDeleteDoc, upsertUserByEmail } from '../lib/firebase';
+import { UserProfile, UserRole, Tenant } from '../types';
 
 interface AuthContextType {
   user: User | null;
@@ -17,6 +17,9 @@ interface AuthContextType {
   enterGhostMode: (targetUser: UserProfile) => void;
   exitGhostMode: () => void;
   updateProfileRole: (uid: string, newRole: UserRole) => Promise<void>;
+  refreshTokenClaims: () => Promise<void>;
+  redeemSchoolJoinCode: (code: string) => Promise<{ success: boolean; message: string }>;
+  setIndividualCandidateMode: () => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -60,43 +63,47 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const isSuperAdminEmail = fbUser.email?.toLowerCase() === 'thenajmulhuda@gmail.com';
     const userEmail = fbUser.email?.toLowerCase().trim();
 
-    // Query all users from Firestore to verify pre-registered role or existing document
-    const allUsers = await safeGetDocs<UserProfile>('users', DEMO_USERS);
-    const matchingUsers = allUsers.filter((u) => u.email && u.email.toLowerCase().trim() === userEmail);
-
-    let baseProfile: UserProfile;
-
-    if (matchingUsers.length > 0) {
-      const rolePriority: Record<string, number> = { super_admin: 4, principal: 3, teacher: 2, student: 1 };
-      matchingUsers.sort((a, b) => (rolePriority[b.role] || 0) - (rolePriority[a.role] || 0));
-      const bestMatch = matchingUsers[0];
-
-      baseProfile = {
-        ...bestMatch,
-        uid: fbUser.uid,
-        name: fbUser.displayName || bestMatch.name || 'User',
-        email: fbUser.email || bestMatch.email,
-        role: isSuperAdminEmail ? 'super_admin' : (bestMatch.role || 'student'),
-        tenant_id: bestMatch.tenant_id,
-        tenant_name: bestMatch.tenant_name,
-        status: bestMatch.status || 'active',
-        lastLoginAt: new Date().toISOString()
-      };
-    } else {
-      baseProfile = {
-        uid: fbUser.uid,
-        email: fbUser.email || 'user@example.com',
-        name: fbUser.displayName || fbUser.email?.split('@')[0] || 'User',
-        role: isSuperAdminEmail ? 'super_admin' : 'student',
-        status: 'active',
-        createdAt: new Date().toISOString(),
-        lastLoginAt: new Date().toISOString()
-      };
+    // 1. Fetch Auth ID token claims
+    let claimRole: UserRole | undefined;
+    let claimTenantId: string | undefined;
+    try {
+      const tokenResult = await fbUser.getIdTokenResult();
+      claimRole = tokenResult.claims.role as UserRole | undefined;
+      claimTenantId = tokenResult.claims.tenant_id as string | undefined;
+    } catch (tokenErr) {
+      console.warn('Notice reading Auth token claims:', tokenErr);
     }
 
+    // 2. Query Firestore user doc to retrieve existing profile metadata
+    const allUsers = await safeGetDocs<UserProfile>('users', DEMO_USERS);
+    const matchingUsers = allUsers.filter((u) => u.email && u.email.toLowerCase().trim() === userEmail);
+    const bestMatch = matchingUsers.length > 0 ? matchingUsers[0] : null;
+
+    // Role & Tenant precedence: Super Admin email > Auth Token Custom Claims > Firestore Doc > Default
+    const effectiveRole: UserRole = isSuperAdminEmail
+      ? 'super_admin'
+      : (claimRole || bestMatch?.role || 'student');
+
+    const effectiveTenantId: string | undefined = isSuperAdminEmail
+      ? undefined
+      : (claimTenantId || bestMatch?.tenant_id);
+
+    const baseProfile: UserProfile = {
+      ...(bestMatch || {}),
+      uid: fbUser.uid,
+      name: fbUser.displayName || bestMatch?.name || fbUser.email?.split('@')[0] || 'User',
+      email: fbUser.email || bestMatch?.email || 'user@example.com',
+      role: effectiveRole,
+      tenant_id: effectiveTenantId,
+      tenant_name: bestMatch?.tenant_name,
+      status: bestMatch?.status || 'active',
+      lastLoginAt: new Date().toISOString()
+    };
+
     const finalProfile = await upsertUserByEmail(baseProfile);
-    logAuthDiagnostic('Resolved User Profile From Firestore/Auth', finalProfile, {
-      matchingDocumentsCount: matchingUsers.length,
+    logAuthDiagnostic('Resolved User Profile From Auth Token Claims / Firestore', finalProfile, {
+      claimRole,
+      claimTenantId,
       isSuperAdminOverride: isSuperAdminEmail
     });
 
@@ -317,6 +324,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     sessionStorage.removeItem('ghost_target_profile');
   };
 
+  const refreshTokenClaims = async () => {
+    try {
+      if (auth.currentUser) {
+        await auth.currentUser.getIdToken(true);
+        const tokenResult = await auth.currentUser.getIdTokenResult();
+        console.log('🔄 Forced Auth ID token claims refresh:', tokenResult.claims);
+        if (profile) {
+          const updated = {
+            ...profile,
+            role: (tokenResult.claims.role as UserRole) || profile.role,
+            tenant_id: (tokenResult.claims.tenant_id as string) || profile.tenant_id
+          };
+          setProfile(updated);
+          localStorage.setItem('active_user_profile', JSON.stringify(updated));
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to force refresh ID token claims:', e);
+    }
+  };
+
   const updateProfileRole = async (uid: string, newRole: UserRole) => {
     try {
       if (profile && profile.uid === uid) {
@@ -328,9 +356,82 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         await safeSetDoc('users', uid, 'uid', { role: newRole });
       }
+      await refreshTokenClaims();
     } catch (e) {
       console.warn('Failed to update role notice:', e);
     }
+  };
+
+  const redeemSchoolJoinCode = async (code: string): Promise<{ success: boolean; message: string }> => {
+    if (!code || !code.trim()) {
+      return { success: false, message: 'Please enter a valid join code.' };
+    }
+
+    const cleanCode = code.trim().toUpperCase();
+
+    // 1. Attempt Cloud Function redeemJoinCode first
+    try {
+      const { getFunctions, httpsCallable } = await import('firebase/functions');
+      const functions = getFunctions(auth.app);
+      const fn = httpsCallable(functions, 'redeemJoinCode');
+      const res: any = await fn({ join_code: cleanCode });
+      if (res.data?.success) {
+        await refreshTokenClaims();
+        return { success: true, message: res.data.message || 'Successfully joined school!' };
+      }
+    } catch (fnErr) {
+      console.warn('Notice calling Cloud Function redeemJoinCode:', fnErr);
+    }
+
+    // 2. Client-side fallback lookup if function unavailable or preview mode
+    const tenants = await safeGetDocs<Tenant>('tenants', DEMO_TENANTS);
+    const matched = tenants.find(
+      (t) =>
+        (t.student_join_code && t.student_join_code.toUpperCase() === cleanCode) ||
+        (t.teacher_join_code && t.teacher_join_code.toUpperCase() === cleanCode) ||
+        (t.join_code && t.join_code.toUpperCase() === cleanCode) ||
+        (t.code && t.code.toUpperCase() === cleanCode)
+    );
+
+    if (!matched) {
+      return { success: false, message: 'Invalid school join code. Please verify with your institute administrator.' };
+    }
+
+    const assignedRole: UserRole = (matched.teacher_join_code && matched.teacher_join_code.toUpperCase() === cleanCode) ? 'teacher' : 'student';
+
+    if (profile) {
+      const updatedProfile: UserProfile = {
+        ...profile,
+        tenant_id: matched.tenant_id,
+        tenant_name: matched.name,
+        role: assignedRole,
+        updatedAt: new Date().toISOString()
+      };
+      setProfile(updatedProfile);
+      localStorage.setItem('active_user_profile', JSON.stringify(updatedProfile));
+      sessionStorage.setItem('active_user_profile', JSON.stringify(updatedProfile));
+      await safeSetDoc('users', profile.uid, 'uid', updatedProfile);
+    }
+
+    await refreshTokenClaims();
+    return { success: true, message: `Successfully joined ${matched.name} as ${assignedRole}!` };
+  };
+
+  const setIndividualCandidateMode = async (): Promise<void> => {
+    if (profile) {
+      const updatedProfile: UserProfile = {
+        ...profile,
+        tenant_id: 'individual',
+        tenant_name: 'Individual Learner (B2C)',
+        role: profile.role === 'super_admin' ? 'super_admin' : 'student',
+        updatedAt: new Date().toISOString()
+      };
+      setProfile(updatedProfile);
+      localStorage.setItem('active_user_profile', JSON.stringify(updatedProfile));
+      sessionStorage.setItem('active_user_profile', JSON.stringify(updatedProfile));
+      await safeSetDoc('users', profile.uid, 'uid', updatedProfile);
+    }
+    await refreshTokenClaims();
   };
 
   const logout = async () => {
@@ -366,6 +467,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         enterGhostMode,
         exitGhostMode,
         updateProfileRole,
+        refreshTokenClaims,
+        redeemSchoolJoinCode,
+        setIndividualCandidateMode,
         logout
       }}
     >

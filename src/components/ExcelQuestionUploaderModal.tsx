@@ -4,6 +4,7 @@ import Papa from 'papaparse';
 import { safeSetDoc } from '../lib/firebase';
 import { Question, QuestionFolder } from '../types';
 import { convertGoogleDriveUrl } from '../lib/driveUtils';
+import { useAuth } from '../context/AuthContext';
 import { 
   FileSpreadsheet, 
   Upload, 
@@ -36,6 +37,7 @@ export const ExcelQuestionUploaderModal: React.FC<ExcelQuestionUploaderModalProp
   folders,
   onUploadSuccess
 }) => {
+  const { profile } = useAuth();
   const [selectedFolderId, setSelectedFolderId] = useState<string>(targetFolderId || 'root');
   const [loading, setLoading] = useState<boolean>(false);
   const [parsedQuestions, setParsedQuestions] = useState<Question[]>([]);
@@ -228,9 +230,22 @@ export const ExcelQuestionUploaderModal: React.FC<ExcelQuestionUploaderModalProp
     let savedCount = 0;
 
     try {
+      const defaultVisibility: 'private' | 'tenant' | 'global' = 
+        profile?.role === 'super_admin' ? 'global' : 'tenant';
+      const defaultTenantId = profile?.role === 'super_admin' ? 'global' : (profile?.tenant_id || 'tenant_govt_iti');
+
       for (const q of parsedQuestions) {
         const finalFolderId = selectedFolderId === 'root' ? undefined : selectedFolderId;
-        const finalQuestion = { ...q, folder_id: finalFolderId };
+        const finalQuestion: Question = { 
+          ...q, 
+          folder_id: finalFolderId,
+          tenant_id: q.tenant_id || defaultTenantId,
+          owner_id: q.owner_id || profile?.uid || 'user',
+          visibility: q.visibility || defaultVisibility,
+          usage_count: q.usage_count || 0,
+          createdAt: q.createdAt || new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
         await safeSetDoc('questions', q.question_id, 'question_id', finalQuestion);
         savedCount++;
       }

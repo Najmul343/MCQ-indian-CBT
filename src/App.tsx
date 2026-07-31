@@ -13,6 +13,7 @@ import { SheetSyncModal } from './components/SheetSyncModal';
 import { QuizMakerModal } from './components/QuizMakerModal';
 import { StudentAnalyticsModal } from './components/StudentAnalyticsModal';
 import { LoginScreen } from './components/LoginScreen';
+import { JoinSchoolScreen } from './components/JoinSchoolScreen';
 import { Test } from './types';
 
 function MainAppContent() {
@@ -41,6 +42,11 @@ function MainAppContent() {
   // If user is signed out or no active profile, show Login Screen
   if (!profile) {
     return <LoginScreen />;
+  }
+
+  // First-time user without tenant_id -> show School Join Code / B2C onboarding
+  if (!profile.tenant_id && profile.role !== 'super_admin') {
+    return <JoinSchoolScreen />;
   }
 
   // Active Exam or Practice Mode

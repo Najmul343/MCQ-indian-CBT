@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Test, Question, TestAttempt } from '../types';
 import { doc, setDoc } from 'firebase/firestore';
-import { db, safeSetDoc } from '../lib/firebase';
+import { db, safeSetDoc, resolveQuestionsForTest } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
 import { 
   Clock, 
@@ -27,9 +27,21 @@ interface PracticeScreenProps {
 export const PracticeScreen: React.FC<PracticeScreenProps> = ({ test, onClose }) => {
   const { profile } = useAuth();
 
-  const questions: Question[] = test.questions && test.questions.length > 0 
-    ? test.questions 
-    : [];
+  const [questions, setQuestions] = useState<Question[]>(test.questions || []);
+  const [loadingQuestions, setLoadingQuestions] = useState<boolean>(!test.questions || test.questions.length === 0);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (!test.questions || test.questions.length === 0) {
+      resolveQuestionsForTest(test).then((qs) => {
+        if (isMounted) {
+          setQuestions(qs);
+          setLoadingQuestions(false);
+        }
+      });
+    }
+    return () => { isMounted = false; };
+  }, [test]);
 
   const storageKey = `practice_session_${test.test_id}`;
 
