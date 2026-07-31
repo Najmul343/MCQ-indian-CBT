@@ -61,41 +61,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const isSuperAdminEmail = fbUser.email?.toLowerCase() === 'thenajmulhuda@gmail.com';
     const userEmail = fbUser.email?.toLowerCase().trim();
 
-    // 1. Fetch Auth ID token claims
-    let claimRole: UserRole | undefined;
-    let claimTenantId: string | undefined;
-    try {
-      const tokenResult = await fbUser.getIdTokenResult();
-      claimRole = tokenResult.claims.role as UserRole | undefined;
-      claimTenantId = tokenResult.claims.tenant_id as string | undefined;
-    } catch (tokenErr) {
-      console.warn('Notice reading Auth token claims:', tokenErr);
-    }
-
-    // 2. Query Firestore user doc to retrieve existing profile metadata
+    // Query Firestore user doc to retrieve existing profile metadata
     const allUsers = await safeGetDocs<UserProfile>('users', DEMO_USERS);
     const matchingUsers = allUsers.filter((u) => u.email && u.email.toLowerCase().trim() === userEmail);
     const bestMatch = matchingUsers.length > 0 ? matchingUsers[0] : null;
 
-    // Role precedence: Super Admin email > Auth Token Custom Claims > Firestore Doc > Default
-    const effectiveRole: UserRole = isSuperAdminEmail
+    // Clean Binary Role System: 'super_admin' or 'student'
+    const role: UserRole = (isSuperAdminEmail || bestMatch?.role === 'super_admin')
       ? 'super_admin'
-      : (claimRole || bestMatch?.role || 'student');
+      : 'student';
 
     const baseProfile: UserProfile = {
       ...(bestMatch || {}),
       uid: fbUser.uid,
       name: fbUser.displayName || bestMatch?.name || fbUser.email?.split('@')[0] || 'User',
       email: fbUser.email || bestMatch?.email || 'user@example.com',
-      role: effectiveRole,
+      role,
       status: bestMatch?.status || 'active',
       lastLoginAt: new Date().toISOString()
     };
 
     const finalProfile = await upsertUserByEmail(baseProfile);
-    logAuthDiagnostic('Resolved User Profile From Auth Token Claims / Firestore', finalProfile, {
-      claimRole,
-      claimTenantId,
+    logAuthDiagnostic('Resolved Binary User Profile (super_admin | student)', finalProfile, {
       isSuperAdminOverride: isSuperAdminEmail
     });
 
@@ -210,7 +197,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => unsubscribe();
   }, []);
 
-  // Login via Firebase Google Auth Popup
+  // Login via Firebase Google Auth Popup with Redirect fallback
   const loginWithGoogle = async (): Promise<UserProfile | null> => {
     setLoading(true);
     sessionStorage.removeItem('explicit_logout');
@@ -234,7 +221,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return userProfile;
       }
     } catch (popupErr: any) {
-      console.warn('Google Popup login notice:', popupErr?.message || popupErr);
+      console.warn('Google Popup login notice:', popupErr?.code, popupErr?.message || popupErr);
+
+      // Attempt fallback to signInWithRedirect if popup was closed or blocked
+      if (popupErr?.code === 'auth/popup-blocked' || popupErr?.code === 'auth/popup-closed-by-user') {
+        try {
+          console.log('Attempting fallback: signInWithRedirect...');
+          await signInWithRedirect(auth, googleProvider);
+          return null;
+        } catch (redirectErr) {
+          console.warn('Google Redirect fallback notice:', redirectErr);
+        }
+      }
+
       setLoading(false);
       throw popupErr;
     }
@@ -317,29 +316,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const refreshTokenClaims = async () => {
     try {
-      if (auth.currentUser) {
-        await auth.currentUser.getIdToken(true);
-        const tokenResult = await auth.currentUser.getIdTokenResult();
-        console.log('🔄 Forced Auth ID token claims refresh:', tokenResult.claims);
-        if (profile) {
+      if (profile) {
+        const allUsers = await safeGetDocs<UserProfile>('users', DEMO_USERS);
+        const dbMatch = allUsers.find((u) => u.uid === profile.uid || (u.email && u.email.toLowerCase() === profile.email?.toLowerCase()));
+        if (dbMatch) {
           const updated = {
             ...profile,
-            role: (tokenResult.claims.role as UserRole) || profile.role,
-            tenant_id: (tokenResult.claims.tenant_id as string) || profile.tenant_id
+            ...dbMatch,
+            role: profile.email?.toLowerCase() === 'thenajmulhuda@gmail.com' ? 'super_admin' : (dbMatch.role || profile.role || 'student')
           };
-          setProfile(updated);
+          setProfile(updated as UserProfile);
           localStorage.setItem('active_user_profile', JSON.stringify(updated));
         }
       }
     } catch (e) {
-      console.warn('Failed to force refresh ID token claims:', e);
+      console.warn('Failed to refresh user profile:', e);
     }
   };
 
   const updateProfileRole = async (uid: string, newRole: UserRole) => {
     try {
       if (profile && profile.uid === uid) {
-        const updatedProfile = { ...profile, role: newRole };
+        const updatedProfile: UserProfile = { ...profile, role: newRole };
         await safeSetDoc('users', uid, 'uid', updatedProfile);
         setProfile(updatedProfile);
         localStorage.setItem('active_user_profile', JSON.stringify(updatedProfile));
@@ -361,8 +359,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (profile) {
       const updatedProfile: UserProfile = {
         ...profile,
-        tenant_id: 'individual',
-        tenant_name: 'Individual Learner (B2C)',
         role: profile.role === 'super_admin' ? 'super_admin' : 'student',
         updatedAt: new Date().toISOString()
       };
@@ -371,7 +367,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       sessionStorage.setItem('active_user_profile', JSON.stringify(updatedProfile));
       await safeSetDoc('users', profile.uid, 'uid', updatedProfile);
     }
-    await refreshTokenClaims();
   };
 
   const logout = async () => {
