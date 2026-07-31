@@ -238,8 +238,6 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({ test, onClose }) => {
         const attemptId = `attempt_exam_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
         const attemptDoc: TestAttempt = {
           attempt_id: attemptId,
-          tenant_id: test.tenant_id,
-          teacher_id: test.teacher_id,
           student_id: profile?.uid || 'guest_student',
           student_email: profile?.email || 'student@gmail.com',
           student_name: profile?.name || 'Student',

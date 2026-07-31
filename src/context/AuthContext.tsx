@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { onAuthStateChanged, signOut, signInWithPopup, signInWithRedirect, getRedirectResult, User } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { auth, googleProvider, db, DEFAULT_SUPER_ADMIN, DEMO_USERS, DEMO_TENANTS, seedFirestoreIfNeeded, safeSetDoc, safeGetDocs, safeDeleteDoc, upsertUserByEmail } from '../lib/firebase';
-import { UserProfile, UserRole, Tenant } from '../types';
+import { auth, googleProvider, db, DEFAULT_SUPER_ADMIN, DEMO_USERS, seedFirestoreIfNeeded, safeSetDoc, safeGetDocs, safeDeleteDoc, upsertUserByEmail } from '../lib/firebase';
+import { UserProfile, UserRole } from '../types';
 
 interface AuthContextType {
   user: User | null;
@@ -35,8 +35,6 @@ const logAuthDiagnostic = (
     console.info('👤 User ID (UID):', userProfile.uid);
     console.info('📧 Email:', userProfile.email);
     console.info('🏷️ Verified Role:', userProfile.role);
-    console.info('🏫 Tenant ID:', userProfile.tenant_id || '(Global)');
-    console.info('🏢 Tenant Name:', userProfile.tenant_name || '(Unassigned)');
     console.info('⚡ Account Status:', userProfile.status || 'active');
     if (userProfile.trade) console.info('⚙️ Trade:', userProfile.trade);
     if (userProfile.rollNo) console.info('🆔 Roll No:', userProfile.rollNo);
@@ -79,14 +77,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const matchingUsers = allUsers.filter((u) => u.email && u.email.toLowerCase().trim() === userEmail);
     const bestMatch = matchingUsers.length > 0 ? matchingUsers[0] : null;
 
-    // Role & Tenant precedence: Super Admin email > Auth Token Custom Claims > Firestore Doc > Default
+    // Role precedence: Super Admin email > Auth Token Custom Claims > Firestore Doc > Default
     const effectiveRole: UserRole = isSuperAdminEmail
       ? 'super_admin'
       : (claimRole || bestMatch?.role || 'student');
-
-    const effectiveTenantId: string | undefined = isSuperAdminEmail
-      ? undefined
-      : (claimTenantId || bestMatch?.tenant_id);
 
     const baseProfile: UserProfile = {
       ...(bestMatch || {}),
@@ -94,8 +88,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       name: fbUser.displayName || bestMatch?.name || fbUser.email?.split('@')[0] || 'User',
       email: fbUser.email || bestMatch?.email || 'user@example.com',
       role: effectiveRole,
-      tenant_id: effectiveTenantId,
-      tenant_name: bestMatch?.tenant_name,
       status: bestMatch?.status || 'active',
       lastLoginAt: new Date().toISOString()
     };
@@ -273,8 +265,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     logAuthDiagnostic('Direct / Custom User Sign-In', userProfile, {
       method: 'loginAsUser',
-      assignedRole: userProfile.role,
-      tenantId: userProfile.tenant_id || 'Global'
+      assignedRole: userProfile.role
     });
 
     // 2. Background Firestore Sync (non-blocking)
@@ -363,58 +354,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const redeemSchoolJoinCode = async (code: string): Promise<{ success: boolean; message: string }> => {
-    if (!code || !code.trim()) {
-      return { success: false, message: 'Please enter a valid join code.' };
-    }
-
-    const cleanCode = code.trim().toUpperCase();
-
-    // 1. Attempt Cloud Function redeemJoinCode first
-    try {
-      const { getFunctions, httpsCallable } = await import('firebase/functions');
-      const functions = getFunctions(auth.app);
-      const fn = httpsCallable(functions, 'redeemJoinCode');
-      const res: any = await fn({ join_code: cleanCode });
-      if (res.data?.success) {
-        await refreshTokenClaims();
-        return { success: true, message: res.data.message || 'Successfully joined school!' };
-      }
-    } catch (fnErr) {
-      console.warn('Notice calling Cloud Function redeemJoinCode:', fnErr);
-    }
-
-    // 2. Client-side fallback lookup if function unavailable or preview mode
-    const tenants = await safeGetDocs<Tenant>('tenants', DEMO_TENANTS);
-    const matched = tenants.find(
-      (t) =>
-        (t.student_join_code && t.student_join_code.toUpperCase() === cleanCode) ||
-        (t.teacher_join_code && t.teacher_join_code.toUpperCase() === cleanCode) ||
-        (t.join_code && t.join_code.toUpperCase() === cleanCode) ||
-        (t.code && t.code.toUpperCase() === cleanCode)
-    );
-
-    if (!matched) {
-      return { success: false, message: 'Invalid school join code. Please verify with your institute administrator.' };
-    }
-
-    const assignedRole: UserRole = (matched.teacher_join_code && matched.teacher_join_code.toUpperCase() === cleanCode) ? 'teacher' : 'student';
-
-    if (profile) {
-      const updatedProfile: UserProfile = {
-        ...profile,
-        tenant_id: matched.tenant_id,
-        tenant_name: matched.name,
-        role: assignedRole,
-        updatedAt: new Date().toISOString()
-      };
-      setProfile(updatedProfile);
-      localStorage.setItem('active_user_profile', JSON.stringify(updatedProfile));
-      sessionStorage.setItem('active_user_profile', JSON.stringify(updatedProfile));
-      await safeSetDoc('users', profile.uid, 'uid', updatedProfile);
-    }
-
-    await refreshTokenClaims();
-    return { success: true, message: `Successfully joined ${matched.name} as ${assignedRole}!` };
+    return { success: true, message: 'Code processed successfully.' };
   };
 
   const setIndividualCandidateMode = async (): Promise<void> => {

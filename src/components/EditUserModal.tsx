@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { UserProfile, UserRole, Tenant, TestFolder, Test } from '../types';
+import { UserProfile, UserRole, TestFolder, Test } from '../types';
 import { safeSetDoc, upsertUserByEmail } from '../lib/firebase';
-import { X, User, Mail, Shield, School, BookOpen, Hash, CheckCircle, AlertCircle, UserCheck, Folder } from 'lucide-react';
+import { X, User, Mail, Shield, BookOpen, Hash, CheckCircle, AlertCircle, Folder } from 'lucide-react';
 
 interface EditUserModalProps {
   isOpen: boolean;
@@ -9,7 +9,7 @@ interface EditUserModalProps {
   onSaved: () => void;
   userToEdit?: UserProfile | null;
   defaultRole?: UserRole;
-  tenants: Tenant[];
+  tenants?: any[];
   teachers?: UserProfile[];
   testFolders?: TestFolder[];
   tests?: Test[];
@@ -35,8 +35,6 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
   onSaved,
   userToEdit,
   defaultRole = 'student',
-  tenants,
-  teachers = [],
   testFolders = [],
   tests = [],
   currentUserId
@@ -44,8 +42,6 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<UserRole>(defaultRole);
-  const [tenantId, setTenantId] = useState('');
-  const [teacherId, setTeacherId] = useState('');
   const [rollNo, setRollNo] = useState('');
   const [trade, setTrade] = useState('Electrician');
   const [className, setClassName] = useState('Batch 2026');
@@ -60,8 +56,6 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
       setName(userToEdit.name || '');
       setEmail(userToEdit.email || '');
       setRole(userToEdit.role || defaultRole);
-      setTenantId(userToEdit.tenant_id || '');
-      setTeacherId(userToEdit.teacher_id || '');
       setRollNo(userToEdit.rollNo || '');
       setTrade(userToEdit.trade || 'Electrician');
       setClassName(userToEdit.className || 'Batch 2026');
@@ -72,8 +66,6 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
       setName('');
       setEmail('');
       setRole(defaultRole);
-      setTenantId(tenants.length > 0 ? tenants[0].tenant_id : '');
-      setTeacherId('');
       setRollNo('');
       setTrade('Electrician');
       setClassName('Batch 2026');
@@ -82,11 +74,9 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
       setAssignedFolders([]);
     }
     setError('');
-  }, [userToEdit, defaultRole, tenants, isOpen]);
+  }, [userToEdit, defaultRole, isOpen]);
 
   if (!isOpen) return null;
-
-  const availableTeachers = teachers.filter((t) => !tenantId || t.tenant_id === tenantId || !t.tenant_id);
 
   const toggleFolderAssignment = (fId: string) => {
     setAssignedFolders((prev) =>
@@ -105,20 +95,14 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
     setError('');
 
     const uid = userToEdit?.uid || `usr_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-    const selectedTenant = tenants.find((t) => t.tenant_id === tenantId);
-    const selectedTeacher = teachers.find((t) => t.uid === teacherId);
 
     const updatedUser: UserProfile = {
       uid,
       name: name.trim(),
       email: email.trim().toLowerCase(),
       role,
-      tenant_id: tenantId || undefined,
-      tenant_name: selectedTenant?.name,
-      teacher_id: role === 'student' ? (teacherId || undefined) : undefined,
-      teacher_name: role === 'student' ? selectedTeacher?.name : undefined,
       rollNo: role === 'student' ? rollNo.trim() : undefined,
-      trade: role === 'student' || role === 'teacher' ? trade : undefined,
+      trade: role === 'student' ? trade : undefined,
       className: role === 'student' ? className : undefined,
       status,
       phone: phone.trim() || undefined,
@@ -185,8 +169,6 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
                 className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
                 <option value="student">Student</option>
-                <option value="teacher">Teacher / Instructor</option>
-                <option value="principal">College Admin / Principal</option>
                 <option value="super_admin">Super Admin</option>
               </select>
             </div>
@@ -244,30 +226,6 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
             </p>
           </div>
 
-          {/* College / Tenant Picker */}
-          {role !== 'super_admin' && (
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Assigned Institution / College
-              </label>
-              <div className="relative">
-                <School className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                <select
-                  value={tenantId}
-                  onChange={(e) => setTenantId(e.target.value)}
-                  className="w-full text-sm pl-9 pr-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  <option value="">-- Select Institution --</option>
-                  {tenants.map((t) => (
-                    <option key={t.tenant_id} value={t.tenant_id}>
-                      {t.name} ({t.code})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          )}
-
           {/* Student Specific Fields */}
           {role === 'student' && (
             <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
@@ -303,7 +261,7 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
           )}
 
           {/* Trade / Subject Interest */}
-          {(role === 'student' || role === 'teacher') && (
+          {role === 'student' && (
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
                 Trade / Specialization Interest
@@ -325,30 +283,8 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
             </div>
           )}
 
-          {/* Assigned Teacher for Student */}
-          {role === 'student' && availableTeachers.length > 0 && (
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
-                <UserCheck className="w-3.5 h-3.5 text-indigo-600" />
-                <span>Assigned Teacher / Instructor</span>
-              </label>
-              <select
-                value={teacherId}
-                onChange={(e) => setTeacherId(e.target.value)}
-                className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
-              >
-                <option value="">-- No Assigned Teacher --</option>
-                {availableTeachers.map((t) => (
-                  <option key={t.uid} value={t.uid}>
-                    👨‍🏫 {t.name} ({t.email}) - {t.trade || 'All Trades'}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
           {/* Assigned Test Folders / QB Access */}
-          {(role === 'teacher' || role === 'student') && testFolders.length > 0 && (
+          {role === 'student' && testFolders.length > 0 && (
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5">
                 <Folder className="w-3.5 h-3.5 text-indigo-600" />

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { UserProfile, UserRole, Tenant } from '../types';
+import { UserProfile, UserRole } from '../types';
 import { safeSetDoc, upsertUserByEmail } from '../lib/firebase';
 import { X, Users, Upload, FileSpreadsheet, Check, AlertCircle, FileText } from 'lucide-react';
 
@@ -7,7 +7,7 @@ interface BulkUserOnboardModalProps {
   isOpen: boolean;
   onClose: () => void;
   onImported: () => void;
-  tenants: Tenant[];
+  tenants?: any[];
   defaultTenantId?: string;
   defaultRole?: UserRole;
 }
@@ -16,12 +16,9 @@ export const BulkUserOnboardModal: React.FC<BulkUserOnboardModalProps> = ({
   isOpen,
   onClose,
   onImported,
-  tenants,
-  defaultTenantId = '',
   defaultRole = 'student'
 }) => {
   const [role, setRole] = useState<UserRole>(defaultRole);
-  const [tenantId, setTenantId] = useState(defaultTenantId || (tenants[0]?.tenant_id || ''));
   const [trade, setTrade] = useState('Electrician');
   const [pastedData, setPastedData] = useState('');
   const [parsedRows, setParsedRows] = useState<Array<{ name: string; email: string; rollNo?: string; trade?: string }>>([]);
@@ -72,7 +69,6 @@ export const BulkUserOnboardModal: React.FC<BulkUserOnboardModalProps> = ({
     setIsImporting(true);
     setError('');
 
-    const selectedTenant = tenants.find((t) => t.tenant_id === tenantId);
     let count = 0;
 
     for (const row of parsedRows) {
@@ -82,8 +78,6 @@ export const BulkUserOnboardModal: React.FC<BulkUserOnboardModalProps> = ({
         name: row.name,
         email: row.email.toLowerCase(),
         role,
-        tenant_id: tenantId || undefined,
-        tenant_name: selectedTenant?.name,
         rollNo: role === 'student' ? (row.rollNo || `2026-${Math.floor(1000 + Math.random() * 9000)}`) : undefined,
         trade: row.trade || trade,
         className: 'Batch 2026',
@@ -165,7 +159,7 @@ export const BulkUserOnboardModal: React.FC<BulkUserOnboardModalProps> = ({
               )}
 
               {/* Onboard Config */}
-              <div className="grid grid-cols-3 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
+              <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Role</label>
                   <select
@@ -174,22 +168,6 @@ export const BulkUserOnboardModal: React.FC<BulkUserOnboardModalProps> = ({
                     className="w-full text-xs px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white"
                   >
                     <option value="student">Student</option>
-                    <option value="teacher">Teacher</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Institution</label>
-                  <select
-                    value={tenantId}
-                    onChange={(e) => setTenantId(e.target.value)}
-                    className="w-full text-xs px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white"
-                  >
-                    {tenants.map((t) => (
-                      <option key={t.tenant_id} value={t.tenant_id}>
-                        {t.name}
-                      </option>
-                    ))}
                   </select>
                 </div>
 

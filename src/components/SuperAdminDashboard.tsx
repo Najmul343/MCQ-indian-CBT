@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { db, DEMO_USERS, DEMO_TENANTS, INITIAL_QUESTIONS, INITIAL_TESTS, safeGetDocs, safeSetDoc, safeDeleteDoc } from '../lib/firebase';
+import { db, DEMO_USERS, INITIAL_QUESTIONS, INITIAL_TESTS, safeGetDocs, safeSetDoc, safeDeleteDoc } from '../lib/firebase';
 import { collection, getDocs, doc, setDoc, deleteDoc, writeBatch } from 'firebase/firestore';
-import { UserProfile, Tenant, Question, Test, TestAttempt, QuestionFolder, TestFolder } from '../types';
-import { EditTenantModal } from './EditTenantModal';
+import { UserProfile, Question, Test, TestAttempt, QuestionFolder, TestFolder } from '../types';
 import { EditUserModal } from './EditUserModal';
 import { BulkUserOnboardModal } from './BulkUserOnboardModal';
 import { QuestionBankManager } from './QuestionBankManager';
@@ -44,11 +43,10 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 }) => {
   const { enterGhostMode, isGhostMode } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'tenants' | 'users' | 'questions' | 'tests' | 'attempts'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'questions' | 'tests' | 'attempts'>('overview');
   const [loading, setLoading] = useState<boolean>(true);
 
   // Firestore Data State
-  const [tenants, setTenants] = useState<Tenant[]>(DEMO_TENANTS);
   const [users, setUsers] = useState<UserProfile[]>(DEMO_USERS);
   const [questions, setQuestions] = useState<Question[]>(INITIAL_QUESTIONS);
   const [tests, setTests] = useState<Test[]>([]);
@@ -59,10 +57,6 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   // Quiz Maker Modal & Edit State
   const [isQuizMakerModalOpen, setIsQuizMakerModalOpen] = useState<boolean>(false);
   const [testToEdit, setTestToEdit] = useState<Test | null>(null);
-
-  // Modals state for seamless CRUD
-  const [isTenantModalOpen, setIsTenantModalOpen] = useState(false);
-  const [tenantToEdit, setTenantToEdit] = useState<Tenant | null>(null);
 
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [userToEdit, setUserToEdit] = useState<UserProfile | null>(null);
@@ -75,21 +69,10 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   const [questionSearch, setQuestionSearch] = useState<string>('');
   const [subjectFilter, setSubjectFilter] = useState<string>('all');
 
-  // New Tenant Modal Form State
-  const [showAddTenant, setShowAddTenant] = useState<boolean>(false);
-  const [newTenantName, setNewTenantName] = useState<string>('');
-  const [newTenantCode, setNewTenantCode] = useState<string>('');
-  const [newTenantCity, setNewTenantCity] = useState<string>('');
-  const [newTenantPrincipalName, setNewTenantPrincipalName] = useState<string>('');
-  const [newTenantPrincipalEmail, setNewTenantPrincipalEmail] = useState<string>('');
-
   // Fetch Firestore Real Data
   const fetchData = async () => {
     setLoading(true);
     try {
-      const fetchedTenants = await safeGetDocs<Tenant>('tenants', DEMO_TENANTS);
-      setTenants(fetchedTenants);
-
       const fetchedUsers = await safeGetDocs<UserProfile>('users', DEMO_USERS);
       setUsers(fetchedUsers);
 
@@ -118,47 +101,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     fetchData();
   }, []);
 
-  // Handle Tenant Creation
-  const handleCreateTenant = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTenantName || !newTenantCode) return;
 
-    const tenantId = `tenant_${Date.now()}`;
-    const newTenant: Tenant = {
-      tenant_id: tenantId,
-      name: newTenantName,
-      code: newTenantCode.toUpperCase(),
-      city: newTenantCity || 'Main Campus',
-      principal_name: newTenantPrincipalName || 'Dr. Principal',
-      principal_email: newTenantPrincipalEmail || `principal@${newTenantCode.toLowerCase()}.edu.in`,
-      max_students: 500,
-      max_teachers: 25,
-      createdAt: new Date().toISOString()
-    };
-
-    try {
-      await safeSetDoc('tenants', tenantId, 'tenant_id', newTenant);
-      setTenants([...tenants, newTenant]);
-      setShowAddTenant(false);
-      setNewTenantName('');
-      setNewTenantCode('');
-      setNewTenantCity('');
-      setNewTenantPrincipalName('');
-      setNewTenantPrincipalEmail('');
-    } catch (err) {
-      console.error('Create tenant error:', err);
-    }
-  };
-
-  // Delete Tenant
-  const handleDeleteTenant = async (tenantId: string) => {
-    try {
-      await safeDeleteDoc('tenants', tenantId, 'tenant_id');
-      setTenants(tenants.filter((t) => t.tenant_id !== tenantId));
-    } catch (err) {
-      console.error('Delete tenant error:', err);
-    }
-  };
 
   // Delete Question
   const handleDeleteQuestion = async (qId: string) => {
@@ -247,17 +190,6 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         </button>
 
         <button
-          onClick={() => setActiveTab('tenants')}
-          className={`px-4 py-2.5 text-xs font-bold rounded-xl transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-            activeTab === 'tenants'
-              ? 'bg-purple-600 text-white shadow-md'
-              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-          }`}
-        >
-          <Building2 className="w-4 h-4" /> Tenants ({tenants.length})
-        </button>
-
-        <button
           onClick={() => setActiveTab('users')}
           className={`px-4 py-2.5 text-xs font-bold rounded-xl transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
             activeTab === 'users'
@@ -294,27 +226,31 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       {/* TAB 1: OVERVIEW METRICS */}
       {activeTab === 'overview' && (
         <div className="space-y-6">
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
-              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tenants</div>
-              <div className="text-2xl font-black text-purple-600 dark:text-purple-400 mt-1">{tenants.length}</div>
-              <div className="text-[11px] text-slate-500 mt-0.5">Institutions</div>
+              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Registered Users</div>
+              <div className="text-2xl font-black text-purple-600 dark:text-purple-400 mt-1">{users.length}</div>
+              <div className="text-[11px] text-slate-500 mt-0.5">Total Accounts</div>
             </div>
 
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
-              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Principals</div>
+              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Students</div>
               <div className="text-2xl font-black text-blue-600 dark:text-blue-400 mt-1">
-                {users.filter((u) => u.role === 'principal').length}
+                {users.filter((u) => u.role === 'student').length}
               </div>
-              <div className="text-[11px] text-slate-500 mt-0.5">Institution Heads</div>
+              <div className="text-[11px] text-slate-500 mt-0.5">Active Candidates</div>
             </div>
 
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
-              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Teachers</div>
-              <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">
-                {users.filter((u) => u.role === 'teacher').length}
-              </div>
-              <div className="text-[11px] text-slate-500 mt-0.5">Instructors</div>
+              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Question Bank</div>
+              <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">{questions.length}</div>
+              <div className="text-[11px] text-slate-500 mt-0.5">Global Questions</div>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
+              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Active Tests</div>
+              <div className="text-2xl font-black text-amber-600 dark:text-amber-400 mt-1">{tests.length}</div>
+              <div className="text-[11px] text-slate-500 mt-0.5">Published Mock Tests</div>
             </div>
 
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
@@ -420,147 +356,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         </div>
       )}
 
-      {/* TAB 2: TENANTS MANAGEMENT */}
-      {activeTab === 'tenants' && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-base font-bold text-slate-900 dark:text-white">
-                Institutions &amp; Colleges ({tenants.length})
-              </h2>
-              <p className="text-xs text-slate-500">
-                Manage SaaS tenant subscriptions, self-join codes, and trade limits
-              </p>
-            </div>
-            <button
-              onClick={() => {
-                setTenantToEdit(null);
-                setIsTenantModalOpen(true);
-              }}
-              className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Onboard New College</span>
-            </button>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {tenants.map((t) => {
-              const tenantTeachers = users.filter((u) => u.role === 'teacher' && u.tenant_id === t.tenant_id);
-              const tenantStudents = users.filter((u) => u.role === 'student' && u.tenant_id === t.tenant_id);
-
-              return (
-                <div key={t.tenant_id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all space-y-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-extrabold uppercase bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-full">
-                          {t.code}
-                        </span>
-                        <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
-                          {t.subscription_plan || 'Pro College'}
-                        </span>
-                        <span className="text-[10px] font-mono font-bold bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-full">
-                          Join: {t.join_code || t.code}
-                        </span>
-                      </div>
-                      <h3 className="text-base font-bold text-slate-900 dark:text-white mt-1.5">{t.name}</h3>
-                      <p className="text-xs text-slate-500">{t.city || 'Main Region'}</p>
-                    </div>
-
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => {
-                          setTenantToEdit(t);
-                          setIsTenantModalOpen(true);
-                        }}
-                        className="p-1.5 text-slate-500 hover:text-indigo-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                        title="Edit College Settings"
-                      >
-                        <Edit3 className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteTenant(t.tenant_id)}
-                        className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                        title="Delete Tenant"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {t.trades_offered && t.trades_offered.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {t.trades_offered.map((tr) => (
-                        <span key={tr} className="text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-md">
-                          {tr}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-3 gap-2 text-xs bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl">
-                    <div>
-                      <div className="text-[10px] text-slate-400 uppercase font-bold">Principal / Admin</div>
-                      <div className="font-semibold text-slate-800 dark:text-slate-200 truncate">{t.principal_name || t.principal_email || 'Assigned'}</div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-slate-400 uppercase font-bold">Teachers</div>
-                      <div className="font-bold text-emerald-600">{tenantTeachers.length} Active</div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-slate-400 uppercase font-bold">Students</div>
-                      <div className="font-bold text-blue-600">{tenantStudents.length} / {t.max_students || 500}</div>
-                    </div>
-                  </div>
-
-                  {/* College Onboarding Quick Actions */}
-                  <div className="flex items-center gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
-                    <button
-                      onClick={() => {
-                        setUserToEdit({
-                          uid: '',
-                          name: '',
-                          email: '',
-                          role: 'teacher',
-                          tenant_id: t.tenant_id,
-                          tenant_name: t.name,
-                          trade: t.trades_offered ? t.trades_offered[0] : 'Electrician'
-                        });
-                        setIsUserModalOpen(true);
-                      }}
-                      className="flex-1 py-1.5 bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-100 text-blue-700 dark:text-blue-300 rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1 cursor-pointer"
-                    >
-                      <UserPlus className="w-3.5 h-3.5" />
-                      <span>+ Onboard Teacher</span>
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        setUserToEdit({
-                          uid: '',
-                          name: '',
-                          email: '',
-                          role: 'student',
-                          tenant_id: t.tenant_id,
-                          tenant_name: t.name,
-                          trade: t.trades_offered ? t.trades_offered[0] : 'Electrician',
-                          className: 'Batch 2026'
-                        });
-                        setIsUserModalOpen(true);
-                      }}
-                      className="flex-1 py-1.5 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1 cursor-pointer"
-                    >
-                      <Users className="w-3.5 h-3.5" />
-                      <span>+ Onboard Student</span>
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
       {/* TAB 3: USERS & GHOST MODE */}
       {activeTab === 'users' && (
@@ -709,22 +505,14 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         />
       )}
 
-      {/* Modals for Seamless SaaS Tenant & User Onboarding */}
-      <EditTenantModal
-        isOpen={isTenantModalOpen}
-        onClose={() => setIsTenantModalOpen(false)}
-        onSaved={fetchData}
-        tenantToEdit={tenantToEdit}
-      />
-
+      {/* Modals for User Onboarding & Quiz Maker */}
       <EditUserModal
         isOpen={isUserModalOpen}
         onClose={() => setIsUserModalOpen(false)}
         onSaved={fetchData}
         userToEdit={userToEdit}
         defaultRole={userToEdit?.role || "student"}
-        tenants={tenants}
-        teachers={users.filter((u) => u.role === 'teacher')}
+        teachers={[]}
         testFolders={testFolders}
       />
 
@@ -732,7 +520,6 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         isOpen={isBulkUserModalOpen}
         onClose={() => setIsBulkUserModalOpen(false)}
         onImported={fetchData}
-        tenants={tenants}
         defaultRole="student"
       />
 

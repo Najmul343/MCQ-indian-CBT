@@ -3,8 +3,6 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { Navbar } from './components/Navbar';
 import { GhostBanner } from './components/GhostBanner';
 import { SuperAdminDashboard } from './components/SuperAdminDashboard';
-import { PrincipalDashboard } from './components/PrincipalDashboard';
-import { TeacherDashboard } from './components/TeacherDashboard';
 import { StudentDashboard } from './components/StudentDashboard';
 import { StudentOnboardingTab } from './components/StudentOnboardingTab';
 import { ExamScreen } from './components/ExamScreen';
@@ -12,12 +10,11 @@ import { PracticeScreen } from './components/PracticeScreen';
 import { SheetSyncModal } from './components/SheetSyncModal';
 import { QuizMakerModal } from './components/QuizMakerModal';
 import { StudentAnalyticsModal } from './components/StudentAnalyticsModal';
-import { LoginScreen } from './components/LoginScreen';
-import { JoinSchoolScreen } from './components/JoinSchoolScreen';
+import { LandingPage } from './components/LandingPage';
 import { Test } from './types';
 
 function MainAppContent() {
-  const { profile, loading } = useAuth();
+  const { profile, loading, loginAsUser } = useAuth();
 
   // Navigation tab state
   const [activeTab, setActiveTab] = useState<string>('dashboard');
@@ -39,14 +36,24 @@ function MainAppContent() {
     );
   }
 
-  // If user is signed out or no active profile, show Login Screen
-  if (!profile) {
-    return <LoginScreen />;
-  }
+  // Handle direct test start from Landing Page for unauthenticated visitors
+  const handleStartTestAsGuest = async (test: Test, mode: 'exam' | 'practice') => {
+    if (!profile) {
+      await loginAsUser({
+        uid: `guest_${Date.now()}`,
+        email: 'guest.candidate@gmail.com',
+        name: 'Guest Candidate',
+        role: 'student',
+        trade: test.trade_class || 'Electrician',
+        status: 'active'
+      });
+    }
+    setActiveTest({ test, mode });
+  };
 
-  // First-time user without tenant_id -> show School Join Code / B2C onboarding
-  if (!profile.tenant_id && profile.role !== 'super_admin') {
-    return <JoinSchoolScreen />;
+  // If user is signed out or no active profile, show Landing Page
+  if (!profile) {
+    return <LandingPage onStartTestDirectly={handleStartTestAsGuest} />;
   }
 
   // Active Exam or Practice Mode
@@ -57,7 +64,7 @@ function MainAppContent() {
     return <ExamScreen test={activeTest.test} onClose={() => setActiveTest(null)} />;
   }
 
-  const role = profile?.role || 'student';
+  const isSuperAdmin = profile?.role === 'super_admin';
 
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans flex flex-col antialiased">
@@ -74,29 +81,18 @@ function MainAppContent() {
 
       {/* Main Role Dashboard or Onboarding Tab */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {activeTab === 'onboard-students' ? (
+        {activeTab === 'onboard-students' && isSuperAdmin ? (
           <StudentOnboardingTab
             onOpenStudentAnalytics={(name, roll) => setAnalyticsStudent({ name, rollNo: roll })}
           />
         ) : (
           <>
-            {role === 'super_admin' && (
+            {isSuperAdmin ? (
               <SuperAdminDashboard
                 onOpenSyncModal={() => setIsSyncModalOpen(true)}
                 onOpenQuizMaker={() => setIsQuizMakerOpen(true)}
               />
-            )}
-
-            {role === 'principal' && <PrincipalDashboard />}
-
-            {role === 'teacher' && (
-              <TeacherDashboard
-                onOpenQuizMaker={() => setIsQuizMakerOpen(true)}
-                onOpenStudentAnalytics={(name, roll) => setAnalyticsStudent({ name, rollNo: roll })}
-              />
-            )}
-
-            {role === 'student' && (
+            ) : (
               <StudentDashboard
                 onStartTest={(test, mode) => setActiveTest({ test, mode })}
               />

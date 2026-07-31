@@ -1,6 +1,6 @@
 {
-  "name": "SaaS MockTest & Quiz Platform",
-  "description": "Multi-tenant SaaS Mock Test and Practice System with 4-Tier Hierarchy, Automated Google Sheets One-Click Sync, Ghost Mode Impersonation, and Firestore real-time database.",
+  "name": "NEXUS CBT — Online Mock Test Portal",
+  "description": "Public CBT Mock Test Portal for NCVT ITI Trade Theory, NEET-UG, CTET & Competitive Exams with NTA CBT Simulator, instant AI scorecard, and multi-tenant management.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

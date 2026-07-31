@@ -13,7 +13,7 @@ import {
   limit 
 } from 'firebase/firestore';
 import firebaseConfigData from '../../firebase-applet-config.json';
-import { UserProfile, Tenant, Question, Test, TestAttempt } from '../types';
+import { UserProfile, Question, Test, TestAttempt } from '../types';
 
 export const firebaseConfig = {
   apiKey: firebaseConfigData.apiKey,
@@ -49,36 +49,11 @@ export const DEMO_USERS: UserProfile[] = [
   DEFAULT_SUPER_ADMIN
 ];
 
-export const DEMO_TENANTS: Tenant[] = [
-  {
-    tenant_id: 'tenant_govt_iti',
-    name: 'Government ITI Delhi (Main Campus)',
-    code: 'GITI-DEL',
-    city: 'New Delhi',
-    principal_id: 'demo_principal_iti',
-    principal_name: 'Dr. Rajesh Sharma',
-    principal_email: 'principal@govt-iti.edu.in',
-    max_students: 500,
-    max_teachers: 25,
-    createdAt: new Date().toISOString()
-  },
-  {
-    tenant_id: 'tenant_pvt_iti',
-    name: 'St. Joseph Technical Institute',
-    code: 'SJTI-MUM',
-    city: 'Mumbai',
-    principal_name: 'Fr. Thomas Varghese',
-    principal_email: 'principal@sjti.edu.in',
-    max_students: 300,
-    max_teachers: 15,
-    createdAt: new Date().toISOString()
-  }
-];
+export const DEMO_TENANTS: any[] = [];
 
 export const INITIAL_QUESTIONS: Question[] = [
   {
     question_id: 'q_001',
-    tenant_id: 'global',
     owner_id: 'system_global',
     visibility: 'global',
     exam_type: 'NCVT ITI',
@@ -109,7 +84,6 @@ export const INITIAL_QUESTIONS: Question[] = [
   },
   {
     question_id: 'q_002',
-    tenant_id: 'global',
     owner_id: 'system_global',
     visibility: 'global',
     exam_type: 'NCVT ITI',
@@ -134,7 +108,6 @@ export const INITIAL_QUESTIONS: Question[] = [
   },
   {
     question_id: 'q_003',
-    tenant_id: 'global',
     owner_id: 'system_global',
     visibility: 'global',
     exam_type: 'NCVT ITI',
@@ -165,7 +138,6 @@ export const INITIAL_QUESTIONS: Question[] = [
   },
   {
     question_id: 'q_004',
-    tenant_id: 'global',
     owner_id: 'system_global',
     visibility: 'global',
     exam_type: 'NCVT ITI',
@@ -190,7 +162,6 @@ export const INITIAL_QUESTIONS: Question[] = [
   },
   {
     question_id: 'q_005',
-    tenant_id: 'global',
     owner_id: 'system_global',
     visibility: 'global',
     exam_type: 'NCVT ITI',
@@ -219,12 +190,9 @@ export const INITIAL_TESTS: Test[] = [
   {
     test_id: 'test_electrician_sem1',
     title: 'Electrician Trade Theory — Semester 1 Grand Mock Test',
-    tenant_id: 'tenant_govt_iti',
-    teacher_id: 'demo_teacher_electrician',
-    teacher_name: 'Er. Anil Kumar',
     trade_class: 'Electrician - Sem 1',
-    institute_name: 'Government ITI Delhi',
-    institute_subtitle: 'Department of Training and Technical Education',
+    institute_name: 'National Test Portal',
+    institute_subtitle: 'Department of Technical Education & Vocational Training',
     exam_type: 'ITI (NCVT)',
     is_free_test: true,
     duration_minutes: 30,
@@ -246,11 +214,8 @@ export const INITIAL_TESTS: Test[] = [
   {
     test_id: 'test_practice_basic_elec',
     title: 'Interactive Practice: Basic Electrical Principles',
-    tenant_id: 'tenant_govt_iti',
-    teacher_id: 'demo_teacher_electrician',
-    teacher_name: 'Er. Anil Kumar',
     trade_class: 'Electrician - Sem 1',
-    institute_name: 'Government ITI Delhi',
+    institute_name: 'National Test Portal',
     exam_type: 'ITI (NCVT)',
     is_free_test: true,
     duration_minutes: 45,
@@ -272,9 +237,6 @@ export const INITIAL_TESTS: Test[] = [
   {
     test_id: 'test_neet_biology_mock1',
     title: 'NEET (UG) 2026 — Free Full Biology & Physics CBT Practice Mock',
-    tenant_id: 'free_portal',
-    teacher_id: 'super_admin',
-    teacher_name: 'NEET Expert Faculty',
     trade_class: 'NEET Medical',
     institute_name: 'AIMS Medical Academy',
     exam_type: 'NEET',
@@ -329,9 +291,6 @@ export const INITIAL_TESTS: Test[] = [
   {
     test_id: 'test_ctet_cdp_mock1',
     title: 'CTET 2026 — Child Development & Pedagogy (Paper I & II) Free CBT Test',
-    tenant_id: 'free_portal',
-    teacher_id: 'super_admin',
-    teacher_name: 'CTET Master Educator',
     trade_class: 'CTET Teacher Exam',
     institute_name: 'Central Teaching Institute',
     exam_type: 'CTET',
@@ -405,12 +364,7 @@ export async function seedFirestoreIfNeeded() {
         batch.set(doc(db, 'users', usr.uid), usr);
       });
 
-      // 2. Tenants
-      DEMO_TENANTS.forEach((t) => {
-        batch.set(doc(db, 'tenants', t.tenant_id), t);
-      });
-
-      // 3. Questions
+      // 2. Questions
       INITIAL_QUESTIONS.forEach((q) => {
         batch.set(doc(db, 'questions', q.question_id), q);
       });
@@ -570,8 +524,8 @@ export async function safeGetDocs<T>(collectionName: string, fallback: T[]): Pro
         emailMap.set(lowerEmail, u);
       } else {
         const existing = emailMap.get(lowerEmail)!;
-        const existingScore = (rolePriority[existing.role] || 0) + (existing.tenant_id ? 0.5 : 0);
-        const newScore = (rolePriority[u.role] || 0) + (u.tenant_id ? 0.5 : 0);
+        const existingScore = (rolePriority[existing.role] || 0);
+        const newScore = (rolePriority[u.role] || 0);
 
         let winner: UserProfile;
         let loser: UserProfile;
@@ -587,9 +541,7 @@ export async function safeGetDocs<T>(collectionName: string, fallback: T[]): Pro
         const mergedWinner: UserProfile = {
           ...loser,
           ...winner,
-          role: winner.role || loser.role,
-          tenant_id: winner.tenant_id || loser.tenant_id,
-          tenant_name: winner.tenant_name || loser.tenant_name,
+          role: winner.role || loser.role
         };
 
         emailMap.set(lowerEmail, mergedWinner);
@@ -691,11 +643,11 @@ export async function upsertUserByEmail(userProfile: UserProfile): Promise<UserP
     (u) => u.email && u.email.toLowerCase().trim() === targetEmail
   );
 
-  const rolePriority: Record<string, number> = { super_admin: 4, principal: 3, teacher: 2, student: 1 };
+  const rolePriority: Record<string, number> = { super_admin: 2, student: 1 };
 
   matchingUsers.sort((a, b) => {
-    const scoreA = (rolePriority[a.role] || 0) + (a.tenant_id ? 0.5 : 0);
-    const scoreB = (rolePriority[b.role] || 0) + (b.tenant_id ? 0.5 : 0);
+    const scoreA = rolePriority[a.role] || 0;
+    const scoreB = rolePriority[b.role] || 0;
     return scoreB - scoreA;
   });
 
@@ -703,8 +655,8 @@ export async function upsertUserByEmail(userProfile: UserProfile): Promise<UserP
 
   let targetRole = userProfile.role;
   if (existingBest) {
-    const existingScore = (rolePriority[existingBest.role] || 0) + (existingBest.tenant_id ? 0.5 : 0);
-    const newScore = (rolePriority[userProfile.role] || 0) + (userProfile.tenant_id ? 0.5 : 0);
+    const existingScore = (rolePriority[existingBest.role] || 0);
+    const newScore = (rolePriority[userProfile.role] || 0);
     if (existingScore > newScore) {
       targetRole = existingBest.role;
     }

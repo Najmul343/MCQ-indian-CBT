@@ -52,18 +52,6 @@ export const Navbar: React.FC<NavbarProps> = ({
       label: 'Super Admin',
       icon: Shield
     },
-    principal: {
-      bg: 'bg-blue-100 dark:bg-blue-950/50 border-blue-300',
-      text: 'text-blue-700 dark:text-blue-300',
-      label: 'Principal',
-      icon: School
-    },
-    teacher: {
-      bg: 'bg-emerald-100 dark:bg-emerald-950/50 border-emerald-300',
-      text: 'text-emerald-700 dark:text-emerald-300',
-      label: 'Instructor / Teacher',
-      icon: UserCheck
-    },
     student: {
       bg: 'bg-amber-100 dark:bg-amber-950/50 border-amber-300',
       text: 'text-amber-800 dark:text-amber-300',
@@ -98,8 +86,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           </div>
 
-          {/* Navigation Tabs for Staff / Admins */}
-          {(profile.role === 'super_admin' || profile.role === 'principal' || profile.role === 'teacher') && (
+          {/* Navigation Tabs for Admins */}
+          {profile.role === 'super_admin' && (
             <nav className="hidden sm:flex items-center gap-1 bg-slate-800/80 p-1 rounded-xl border border-slate-700/80">
               <button
                 onClick={() => setActiveTab('dashboard')}
@@ -123,9 +111,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 <UserPlus className="w-4 h-4 text-blue-400" />
                 <span>Onboard Students</span>
-                <span className="px-1.5 py-0.2 bg-emerald-500/30 text-emerald-300 text-[9px] rounded-full uppercase font-extrabold border border-emerald-500/40">
-                  Tab
-                </span>
               </button>
             </nav>
           )}
@@ -145,8 +130,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             )}
 
-            {/* Teacher / Principal / Admin Quiz Maker Button */}
-            {(profile.role === 'teacher' || profile.role === 'principal' || profile.role === 'super_admin') && (
+            {/* Admin Quiz Maker Button */}
+            {profile.role === 'super_admin' && (
               <button
                 onClick={onOpenQuizMaker}
                 className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm active:scale-95 cursor-pointer"

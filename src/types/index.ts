@@ -1,15 +1,10 @@
-export type UserRole = 'super_admin' | 'principal' | 'teacher' | 'student';
+export type UserRole = 'super_admin' | 'student';
 
 export interface UserProfile {
   uid: string;
   email: string;
   name: string;
   role: UserRole;
-  tenant_id?: string;
-  tenant_name?: string;
-  principal_id?: string;
-  teacher_id?: string;
-  teacher_name?: string;
   accessible_courses?: string[];
   assigned_folders?: string[]; // TestFolder IDs assigned to this student
   assigned_tests?: string[];   // Specific Test IDs assigned to this student
@@ -23,25 +18,6 @@ export interface UserProfile {
   createdAt?: string;
   lastLoginAt?: string;
   registered_by?: string;
-}
-
-export interface Tenant {
-  tenant_id: string;
-  name: string;
-  code: string;
-  city?: string;
-  join_code?: string; // e.g. 'GITI-2026' for self-onboarding
-  student_join_code?: string;
-  teacher_join_code?: string;
-  principal_id?: string;
-  principal_name?: string;
-  principal_email?: string;
-  status?: 'Active' | 'Trial' | 'Suspended';
-  subscription_plan?: 'Free Starter' | 'Pro College' | 'Enterprise';
-  trades_offered?: string[]; // e.g. ['Electrician', 'Fitter', 'Welder', 'COPA', 'Wireman', 'Employability Skills']
-  max_students?: number;
-  max_teachers?: number;
-  createdAt: string;
 }
 
 export interface QuestionOptions {
@@ -59,7 +35,6 @@ export interface QuestionFolder {
   category?: string; // '⚡ ITI (NCVT) (Trade Theory CBT)' | '🩺 NEET (UG) (Medical Entrance CBT)' | '📚 CTET (Teaching Eligibility CBT)'
   trade?: string;
   createdAt: string;
-  tenant_id?: string;
 }
 
 export interface TestFolder {
@@ -70,15 +45,13 @@ export interface TestFolder {
   category?: string; // '⚡ ITI (NCVT) (Trade Theory CBT)' | '🩺 NEET (UG) (Medical Entrance CBT)' | '📚 CTET (Teaching Eligibility CBT)'
   trade?: string;
   createdAt: string;
-  tenant_id?: string;
 }
 
 export interface Question {
   question_id: string;
   folder_id?: string;
-  tenant_id?: string | 'global';
   owner_id?: string;
-  visibility?: 'private' | 'tenant' | 'global';
+  visibility?: 'private' | 'global';
   exam_type: string;
   subject: string;
   chapter: string;
@@ -104,7 +77,6 @@ export interface Question {
 export interface Course {
   course_id: string;
   title: string;
-  tenant_id?: string;
   hierarchy: {
     exam_type: string;
     subject: string;
@@ -118,9 +90,6 @@ export interface Test {
   test_id: string;
   folder_id?: string;
   title: string;
-  tenant_id?: string;
-  teacher_id?: string;
-  teacher_name?: string;
   trade_class?: string;
   institute_name?: string;
   institute_subtitle?: string;
@@ -143,8 +112,6 @@ export interface Test {
 
 export interface TestAttempt {
   attempt_id: string;
-  tenant_id?: string;
-  teacher_id?: string;
   student_id: string;
   student_email: string;
   student_name: string;

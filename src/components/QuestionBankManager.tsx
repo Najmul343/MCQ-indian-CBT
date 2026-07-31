@@ -365,17 +365,12 @@ export const QuestionBankManager: React.FC<QuestionBankManagerProps> = ({
     }
 
     const qId = questionToEdit ? questionToEdit.question_id : `q_${Date.now()}`;
-    const userRole = profile?.role;
-    const defaultVisibility: 'private' | 'tenant' | 'global' = 
-      userRole === 'super_admin' ? 'global' : 'tenant';
-    const defaultTenantId = userRole === 'super_admin' ? 'global' : (profile?.tenant_id || 'tenant_govt_iti');
 
     const questionObj: Question = {
       question_id: qId,
       folder_id: questionToEdit ? questionToEdit.folder_id : (currentFolderId || undefined),
-      tenant_id: questionToEdit ? (questionToEdit.tenant_id || defaultTenantId) : defaultTenantId,
       owner_id: questionToEdit ? (questionToEdit.owner_id || profile?.uid || 'user') : (profile?.uid || 'user'),
-      visibility: questionToEdit ? (questionToEdit.visibility || defaultVisibility) : defaultVisibility,
+      visibility: 'global',
       exam_type: 'NCVT ITI',
       subject: qSubject.trim(),
       chapter: qChapter.trim(),

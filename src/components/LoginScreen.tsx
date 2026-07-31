@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { safeGetDocs, DEMO_TENANTS, DEFAULT_SUPER_ADMIN } from '../lib/firebase';
-import { UserProfile, Tenant } from '../types';
+import { safeGetDocs, DEFAULT_SUPER_ADMIN } from '../lib/firebase';
+import { UserProfile } from '../types';
 import { 
   GraduationCap, 
   Mail, 
@@ -131,12 +131,6 @@ export const LoginScreen: React.FC = () => {
     setError('');
 
     try {
-      const tenants = await safeGetDocs<Tenant>('tenants', DEMO_TENANTS);
-      const matchTenant = tenants.find(
-        (t) =>
-          (t.join_code && t.join_code.toLowerCase() === joinCode.trim().toLowerCase()) ||
-          t.code.toLowerCase() === joinCode.trim().toLowerCase()
-      ) || tenants[0];
 
       const newUid = `student_${Date.now()}`;
       const newStudent: UserProfile = {
@@ -144,8 +138,6 @@ export const LoginScreen: React.FC = () => {
         name: studentName.trim(),
         email: studentEmail.trim().toLowerCase(),
         role: 'student',
-        tenant_id: matchTenant ? matchTenant.tenant_id : 'tenant_govt_iti',
-        tenant_name: matchTenant ? matchTenant.name : 'Government ITI',
         rollNo: studentRoll.trim() || `2026-${Math.floor(100 + Math.random() * 900)}`,
         trade: studentTrade,
         className: 'Sem 1',

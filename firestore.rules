@@ -8,89 +8,47 @@ service cloud.firestore {
     function myRole() {
       return request.auth.token.role != null ? request.auth.token.role : get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
     }
-    function myTenant() {
-      return request.auth.token.tenant_id != null ? request.auth.token.tenant_id : get(/databases/$(database)/documents/users/$(request.auth.uid)).data.tenant_id;
-    }
     function isSuperAdmin() {
       return isSignedIn() && (myRole() == 'super_admin' || request.auth.token.email == 'thenajmulhuda@gmail.com');
     }
-    function isPrincipalOf(tenantId) {
-      return isSignedIn() && (isSuperAdmin() || (myRole() == 'principal' && myTenant() == tenantId));
-    }
-    function isTeacherOf(tenantId) {
-      return isSignedIn() && (isSuperAdmin() || (myRole() == 'teacher' && myTenant() == tenantId));
-    }
-    function isStaffOf(tenantId) {
-      return isSuperAdmin() || isPrincipalOf(tenantId) || isTeacherOf(tenantId);
-    }
-    function isStudentOf(tenantId) {
-      return isSignedIn() && (myRole() == 'student' && (myTenant() == tenantId || myTenant() == 'individual' || tenantId == 'individual'));
-    }
 
+    // Super Admin global override
     match /{document=**} {
       allow read, write: if isSuperAdmin();
     }
 
-    // Users collection rules: readable within tenant, self-updatable for non-sensitive fields
+    // Users collection rules: read/write own profile
     match /users/{userId} {
-      allow read: if isSignedIn() && (
-        isSuperAdmin() ||
-        userId == request.auth.uid ||
-        resource.data.tenant_id == myTenant() ||
-        myRole() in ['principal', 'teacher']
-      );
+      allow read: if isSignedIn();
       allow create: if isSignedIn() && userId == request.auth.uid;
       allow update: if isSignedIn() && (
         isSuperAdmin() ||
         (userId == request.auth.uid && request.resource.data.role == resource.data.role)
       );
-      allow delete: if isSuperAdmin() || isPrincipalOf(resource.data.tenant_id);
+      allow delete: if isSuperAdmin();
     }
 
-    // Tenants collection rules: Super admin creates/suspends, Principal reads/updates own tenant
-    match /tenants/{tenantId} {
-      allow read: if isSignedIn();
-      allow update: if isPrincipalOf(tenantId) || isSuperAdmin();
-      allow create, delete: if isSuperAdmin();
-    }
-
-    // Questions: Global bank visible to all signed-in users, tenant questions visible to tenant staff & students
+    // Questions: readable by all signed-in students/admins
     match /questions/{questionId} {
-      allow read: if isSignedIn() && (
-        isSuperAdmin() ||
-        resource.data.visibility == 'global' ||
-        resource.data.tenant_id == 'global' ||
-        resource.data.tenant_id == myTenant() ||
-        myTenant() == 'individual'
-      );
-      allow create: if isSignedIn() && (isSuperAdmin() || isStaffOf(request.resource.data.tenant_id) || request.resource.data.tenant_id == 'individual');
-      allow update, delete: if isSignedIn() && (isSuperAdmin() || isStaffOf(resource.data.tenant_id) || resource.data.owner_id == request.auth.uid);
+      allow read: if isSignedIn();
+      allow create, update, delete: if isSuperAdmin();
     }
 
-    // Tests: Readable by signed-in users in the tenant or individual mode; writable by staff
+    // Tests: readable by all signed-in students/admins
     match /tests/{testId} {
-      allow read: if isSignedIn() && (
-        isSuperAdmin() ||
-        resource.data.tenant_id == myTenant() ||
-        resource.data.tenant_id == 'global' ||
-        myTenant() == 'individual'
-      );
-      allow create, update: if isSignedIn() && (isSuperAdmin() || isStaffOf(request.resource.data.tenant_id) || request.resource.data.tenant_id == 'individual');
-      allow delete: if isSignedIn() && (isSuperAdmin() || isPrincipalOf(resource.data.tenant_id));
+      allow read: if isSignedIn();
+      allow create, update, delete: if isSuperAdmin();
     }
 
-    // Test Attempts: Immutable once created by student / candidate; readable by student or tenant staff
+    // Test Attempts: students create & read their own attempts; super_admin can manage all
     match /test_attempts/{attemptId} {
       allow read: if isSignedIn() && (
-        isSuperAdmin() ||
-        resource.data.student_id == request.auth.uid ||
-        (resource.data.tenant_id == myTenant() && myRole() in ['principal', 'teacher'])
+        isSuperAdmin() || resource.data.student_id == request.auth.uid
       );
       allow create: if isSignedIn() && (
-        request.resource.data.student_id == request.auth.uid
+        request.resource.data.student_id == request.auth.uid || isSuperAdmin()
       );
-      allow update: if isSuperAdmin(); // attempts are immutable for students
-      allow delete: if isSuperAdmin() || isPrincipalOf(resource.data.tenant_id);
+      allow update, delete: if isSuperAdmin();
     }
   }
 }
